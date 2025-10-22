@@ -47,8 +47,13 @@ LOG_HEADERS = {
     'admin': 'TIMESTAMP                   {LEVEL} {COMP} {ADDRESS}   {ENDPOINT}    {TYPE}    {CODE}  MESSAGE',
     'clientstats': 'Timestamp    Network Bytes In    Network Bytes Out    Remote Calls    Remote Calls In Progress    Elapsed Time    Wait Time    I/O Time    Client name',
     'events': 'TIMESTAMP                ZONE    LEVEL         CODE    HOSTNAME                       MESSAGE',
-    'fmodata': 'Timestamp    Error    Level    IP_Address    User    HTTP    Message    Usage',
-    
+    'fmdapi': 'TIMESTAMP    ERROR    LEVEL    IP_ADDRESS    USER    HTTP    MESSAGE    USAGE'
+    'fmodata': 'TIMESTAMP                        CODE    LEVEL   ADDRESS             OP     ENDPOINT       SIZE',
+    'fmshelper': 'TIMESTAMP                ZONE MESSAGE'
+    'loadschedules': 'MESSAGE',
+    'scriptevent': 'TIMESTAMP                ZONE    CODE MESSAGE',
+    'stats': 'TIMESTAMP                ZONE NET KB/s In    NET KB/s OUT    DISK KB/s READ    DISDK KB/s WRITE    CACHE HIT %    CACHE UNSAVED %    PRO CLIENTS    OPEN DBS    XDBC CLIENTS    WEBD CLIENTS    CWP CLIENTS    REMOTE CALLS/s    IN PROGRESS    ELAPSED TIME    WAIT TIME    I/O TIME    GO CLIENTS',
+    'stderrserverscripting': 'MESSAGE',
 }
 
 LOG_PATHS_STANDARD = {
