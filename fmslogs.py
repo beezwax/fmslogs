@@ -8,7 +8,7 @@ Display FileMaker Server logs and change logging options.
 Created by Simon Brown on 10/15/2025.
 """
 
-import argparse, curses, os, pathlib, platform, sys, time
+import argparse, curses, os, pathlib, platform, sys, textwrap, time
 from collections import OrderedDict
 
 """
@@ -16,6 +16,8 @@ non-standard install location?
 'top' or iostat option
 Show column headers if relevant
 have merged logs
+summarize results where possible (eg, count, min, max, sum)?
+convert table IDs
 
 
 fmslogs [show|tail] all|access|dapi|events|fmsdebug|odata|topcall|wpe [-l|--last] [-h|head] [-t|tail]
@@ -24,10 +26,14 @@ fmslogs dapi # tail of log (but not following), printing as many lines as rows o
 fmslogs -h access events
 fmslogs -h -n 100 access events
 fmslogs -s topcall 1 # enable TopCall.log
+paging output
+open either directory or log file in text editor, eg $EDITOR
 
 """
 
-FILTER_REGEX = ''
+FILTER_STR = '.*'   # -f may replace this value
+FILTER_REGEX = None
+
 SCREENCOLS, SCREENROWS = os.get_terminal_size()
 MAX_READ_LEN = 1048576*10
 #LOG_CHOICES = ['access', 'admin', 'clientstats', 'dapi', 'events', 'install', 'odata', 'scriptevent', 'stats', 'stderr', 'stderrserverscripting', 'stdout', 'syslog', 'stats', 'topcall', 'wpe']
@@ -150,11 +156,11 @@ def setup_parser() -> argparse.ArgumentParser:
     parser.add_argument('-S', '--set', nargs=1, type=int, help='change log configuration option')
     parser.add_argument('-s', '--succinct', action='store_true', help='strip less useful details from log output')
     parser.add_argument('-t', '--tail', action='store_true', help='wait for any new messages after printing current end of log')
-    parser.add_argument('--truncate', action='store_true', help='cut off any output if beyond width of screen')
+    parser.add_argument('--truncate', nargs='?', action='store_true', help='cut off any output if beyond width of screen')
     parser.add_argument('-v', '--version', action='store_true', help='version info')
-
+    # Hack to avoid error if there is only an option specified but no positional argument
     parser.add_argument('log1', nargs='?', choices=ALL_CHOICES, help='log name to display')
-    parser.add_argument('log2', nargs='?', choices=LOG_CHOICES, help='additional log to display')
+    parser.add_argument('log2', nargs='?', help='additional log to display')
 
     return parser
 
@@ -230,6 +236,30 @@ def list_logs():
         else:
             print('{:18}            <missing>'.format (log))
 
+#
+#   p r o c e s s _ l o g _ l i n e
+#
+
+def process_log_line (line: str, logName: str, useSuccinct: bool)
+
+    # line matches filter?
+    # within date range?
+    # using succinct and log supports it?
+    #   strip timestamps
+    #   strip hostnames
+    #   adjust header
+    # need to detab?
+    #   detab using log's tab stop
+    # truncating?
+    #   truncate line
+
+    if FILTER_REGEX.search (line):
+        textWrap = textwrap.TextWrapper(width=120,tabsize=10)   # TODO: don't instantiate this once for every line
+        line = textWrap (line)
+        if useSuccinct and len (line) > 28 and line[0] == '2':  # presumably start of 4 digit year
+            line = line [:23] + [29:]   # remove timeezone
+
+
 
 def print_log_header (logName:str) -> bool:
     
@@ -270,16 +300,38 @@ def show_file_head_faster (filePath: str, lines: int) -> bool:
     #STDSCR.getch()
     return result
 
-def show_file_head (logName:str, lines:int) -> bool:
+#
+#   p r i n t _ f i l e _ h e a d
+#
+
+def print_file_head (logName:str, lines:int) -> bool:
     
     filePath = LOG_PATHS [logName]
+    lineCount = 0
+
+    try:
+        with open(filePath, "r+b") as f:
+            m=mmap.mmap(f.fileno(), 0, prot=mmap.PROT_READ)
+            print_log_header (logName)
+            while True:
+                line=m.readline()
+                if line == '': break
+                if FILTER_REGEX.search (line):
+                    print line.rstrip()
+                    lineCount =+ 1
+    except IOError:
+        print ('File Error:', filePath, 'could not be opened')
+        return False
     
-    with open (filePath, 'r') as logFile:
-        print_log_header (logName)
+    return True
+
+#
+#   h a n d l e _ h e a d
+#
 
 def handle_head (logNames: list):
     for log in logNames:
-        show_file_head (get_log_path(log), SCREENROWS)
+        print_file_head (get_log_path(log), SCREENROWS)
 
 
 def show_file_tail (filePath: str, lines: int) -> bool:
@@ -312,6 +364,20 @@ def show_file_tail (filePath: str, lines: int) -> bool:
 # https://gist.github.com/pylixm/e6bd4f5456740c12e462eecbc66692fb # tail/follow a file
 
 
+def compile_filter -> bool:
+    
+    global FILTER_REGEX
+    isValid = False
+    
+    try:
+        FILTER_REGEX = re.compile(FILTER_STR)
+        isValid = True
+    except re.error as e:       # aliased to PatternError as of 3.13
+        print(f"Regex Error: {e}")
+
+    return isValid
+
+
 def main():
     parser = setup_parser()
     args = parser.parse_args()
@@ -334,6 +400,12 @@ def main():
             # Do first in case enabling a log
             handle_set (args.set)
             break
+        if args.filter:
+            FILTER_STR = args.filter
+        
+        if !compile_filter():    # Compile the default or the filter that was just set
+            break               # bad regex
+        
         if args.head:
             handle_head (args.head)
         if args.tail:

@@ -5,6 +5,10 @@ Consolidates access to various logs with no dependencies other than the core Pyt
 
 ## WORK IN PROGRESS
 
+Many features not working, and those that are present are incomplete.
+
+---
+
 ```
 usage: fmslogs [-f FILTER] [-h [HEAD ...]] [--help] [-l] [-L] [-m] [-r RANGE] [-S SET] [-s] [-t] [--truncate] [-v] [LOG1] [LOG2]
                [{access,admin,clientstats,dapi,events,fac,fmodatadebug,fmsadmindebug,fmsasedebug,fmscwpc,fmscwpcli,fmsdebug,fmsgetpasskeyebug,fmshdebug,fmshelper,fmslogdebug,fmwipd,install,loadschedules,odata,scriptevent,stats,stderr,stdout,topcall,trimlog,wpe,wpedebug,interval,clientstats,fmsdebug,logsize,topcall}]
@@ -29,3 +33,6 @@ options:
   --truncate            cut off any output if beyond width of screen
   -v, --version         version info
 ```
+
+---
+
