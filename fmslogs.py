@@ -1,14 +1,14 @@
-# -*- Mode:Python; indent-tabs-mode:nil; tab-width:4; encoding:utf-8 -*-
+#!/usr/bin/env python3
+# -*- Mode:Python; indent-tabs-mode:nil; tab-width:3; encoding:utf-8 -*-
 
 """
-fmslogs.py
-
-Display FileMaker Server logs and change logging options.
-
-Created by Simon Brown on 10/15/2025.
+Filename: fmslogs.py
+Author: Simon Brown on 10/15/2025
+Version: 0.10, 2025-10-27
+Purpose: Display FileMaker Server logs and change logging options.
 """
 
-import argparse, curses, os, pathlib, platform, sys, textwrap, time
+import argparse, curses, linecache, os, pathlib, platform, sys, textwrap, time
 from collections import OrderedDict
 
 """
@@ -18,6 +18,7 @@ Show column headers if relevant
 have merged logs
 summarize results where possible (eg, count, min, max, sum)?
 convert table IDs
+paged output
 
 
 fmslogs [show|tail] all|access|dapi|events|fmsdebug|odata|topcall|wpe [-l|--last] [-h|head] [-t|tail]
@@ -31,8 +32,10 @@ open either directory or log file in text editor, eg $EDITOR
 
 """
 
+TIMESTAMP_REGEX = None
 FILTER_STR = '.*'   # -f may replace this value
 FILTER_REGEX = None
+TEXTWRAP = textwrap.TextWrapper(width=120,tabsize=10)
 
 SCREENCOLS, SCREENROWS = os.get_terminal_size()
 MAX_READ_LEN = 1048576*10
@@ -40,70 +43,173 @@ MAX_READ_LEN = 1048576*10
 
 # Default deployment paths (Windows paths will have forward slashes converted)
 DEF_BASE_PATHS = {
-    'Darwin': '/Library/FileMaker Server',
-    'Linux': '/opt/FileMaker/FileMaker Server',
-    'Windows': 'C:/Programs/FileMaker/FileMaker Server'
+	'Darwin': '/Library/FileMaker Server',
+	'Linux': '/opt/FileMaker/FileMaker Server',
+	'Windows': 'C:/Programs/FileMaker/FileMaker Server'
 }
 
 # This may get overridden by user option,
 BASE_PATH = DEF_BASE_PATHS [platform.system()]
 
-LOG_HEADERS = {
-    'access': 'TIMESTAMP                        LEVEL         CODE    MESSAGE',
-    'admin': 'TIMESTAMP                   {LEVEL} {COMP} {ADDRESS}   {ENDPOINT}    {TYPE}    {CODE}  MESSAGE',
-    'clientstats': 'Timestamp    Network Bytes In    Network Bytes Out    Remote Calls    Remote Calls In Progress    Elapsed Time    Wait Time    I/O Time    Client name',
-    'events': 'TIMESTAMP                ZONE    LEVEL         CODE    HOSTNAME                       MESSAGE',
-    'fmdapi': 'TIMESTAMP    ERROR    LEVEL    IP_ADDRESS    USER    HTTP    MESSAGE    USAGE'
-    'fmodata': 'TIMESTAMP                        CODE    LEVEL   ADDRESS             OP     ENDPOINT       SIZE',
-    'fmshelper': 'TIMESTAMP                ZONE MESSAGE'
-    'loadschedules': 'MESSAGE',
-    'scriptevent': 'TIMESTAMP                ZONE    CODE MESSAGE',
-    'stats': 'TIMESTAMP                ZONE NET KB/s In    NET KB/s OUT    DISK KB/s READ    DISDK KB/s WRITE    CACHE HIT %    CACHE UNSAVED %    PRO CLIENTS    OPEN DBS    XDBC CLIENTS    WEBD CLIENTS    CWP CLIENTS    REMOTE CALLS/s    IN PROGRESS    ELAPSED TIME    WAIT TIME    I/O TIME    GO CLIENTS',
-    'stderrserverscripting': 'MESSAGE',
+LOG_SPECS = {
+	'access': {
+		'path': 'Logs/Access.log',
+		#        ---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
+		#        2025-09-15 01:12:45.831 -0700  Information  228   some-dev.filemaker.beezwax.net         The previous log file reached maximum size, and was renamed to "Access-old.log".
+		'head': 'TIMESTAMP                      LEVEL        CODE  HOST                                   MESSAGE',
+		'tbst': [32,45,51,90],
+		#        2025-09-15 01:12:45.831  Information  228   The previous log file reached maximum size, and was renamed to "Access-old.log".
+		'shed': 'TIMESTAMP                LEVEL        CODE  MESSAGE' ),
+		'shtb': [26,39,45]
+	},
+	'admin': {
+		'path': 'Admin/FAC/logs/fac.log',
+		#        ---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
+		#			2022-05-17 14:29:56 -0700	 Execute /opt/FileMaker/FileMaker Server/Admin/FAC/facstart.sh
+		#			2022-05-17 14:30:00 -0700 - warn:   fmi   127.0.0.1   notifications   general   n/a   "New system notification generated, type: CPU_USAGE_EXCEED_HARD_LIMIT"
+		# Only uses tabs with regular messages (eg, not error or warn) after timestamp.
+		'head': 'TIMESTAMP                 {LEVEL}   {END} {ADDRESS}   {COMPONENT}    {TYPE}    {CODE}  MESSAGE',
+		'tbst': [29],
+		'shed': 'TIMESTAMP           {LEVEL}   {END} {ADDRESS}   {COMPONENT}    {TYPE}    {CODE}  MESSAGE',
+		'shtb': [23]
+	},
+	'clientstats': {
+		'path': 'Logs/ClientStats.log',
+		#        ---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
+		#			2025-10-16 15:46:18.054 -0700  37781   8559   209   0     46442     0    28    Xeronthia Shilnow (XS ETMD6M) [255.143.244.179]
+		'head': '                               NET BYTES  NET BYTES  CALLS      CALLS      TIME       TIME       TIME' + \
+				  'TIMESTAMP                      IN         OUT        COMPLETE   IN PROG    ELAPSED    WAIT       I/O        CLIENT NAME'
+		'tbst': [32,43,54,65,76,87,98,109],
+		#			2025-10-16 15:46:18.054  37781    8559    209     0    46442    0     28   Xeronthia Shilnow (XS ETMD6M) [255.143.144.79]
+		'shed': '                         NET BYTES  NET BYTES CALLS     CALLS     TIME      TIME      TIME' + \
+				  'TIMESTAMP                IN         OUT       COMPLETE  IN PROG   ELAPSED   WAIT      I/O       CLIENT NAME'
+		'shtb': [26,37,48,59,70,81,92,103]
+	},
+	
+	'dapi': {
+		'path': 'Logs/fmdapi.log',
+		#        ---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
+		#			2025-08-27 11:08:10.055 -0700  4101   ERROR	250.130.228.236  some-user-name   POST  Script Error -- Script File: 'Tool', Script Name: 'create update topic [PSoS]', Script Step: 'Set Field By Name'  0
+		# Size at end (re-arrange columns?). Rarely a 4 digit error code.
+		'head': 'TIMESTAMP	                   CODE   LEVEL   HOST            USER             HTTP  MESSAGE  SIZE',
+		'tbst': [32,39,47,63,81,87],
+		#			2025-08-27 11:08:10.055  301   ERROR  some-user-name   POST  Script Error -- Script File: 'Tool', Script Name: 'create update topic [PSoS]', Script Step: 'Set Field By Name'  0
+		'shed': 'TIMESTAMP	             CODE  LEVEL  USER             HTTP  MESSAGE  SIZE',
+		'shtb': [26,32,39,56,62]
+	},
+	
+	'events': {
+		'path': 'Logs/Event.log',
+		#        ---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
+		#			2025-08-18 23:15:30.125 -0700  Information  228   some-dev.filemaker.beezwax.net  The previous log file reached maximum size, and was renamed to "Event-old.log".
+		'head': 'TIMESTAMP                ZONE  LEVEL        CODE  HOST                            MESSAGE',
+		'tbst': [32,45,51,83],
+		#			2025-08-18 23:15:30.125  Information  228   some-dev.filemaker.beezwax.net  The previous log file reached maximum size, and was renamed to "Event-old.log".
+		'shed': 'TIMESTAMP                LEVEL        CODE  HOST                            MESSAGE',
+		'shtb': [26,39,45,77]
+	},
+	
+	'fmshelper': {
+		'path': 'Logs/fmshelper.log',
+			# This log has no consistent format
+			#		2025-08-03 20:12:38.182 -0700   Log file /opt/FileMaker/FileMaker Server/Logs/fmshelper.log size: 478 bytes (0 MB), threshold ratio: 0
+			#		2025-08-03 20:12:38.185 -0700 === stopSystemWebServer()
+			#		(Use `facstart.sh --trace-warnings ...` to show where the warning was created)
+			#		Thrift: Sun Aug  3 20:12:47 2025 TNonblockingServer: Serving with 5 io threads.
+			#		127.0.0.1 POST /fmi/admin/internal/v1/dbs-notification/xPR2AgRM1TODanCZ56eikiYXcbzvTDdtLIbd9Avs3Z4kuxie - - - ms
+			#		Aug 03, 2025 8:12:53 PM org.apache.jasper.servlet.TldScanner scanJars
+			#		2025/08/03 20:39:27.0128: [ 2525]:    TRACE:       mongoc: ENTRY: _mongoc_linux_distro_scanner_get_distro():389
+		'head': None,
+		'tbst': []	# replace any tabs with two spaces
+	},
+	
+	'loadschedules':
+		'path': 'Logs/install.log',
+		'head': None,
+		'tbst': []
+	},
+
+	'odata': {
+		'path': 'Logs/fmodata.log',
+		#        ---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
+		#		  '2025-10-14T13:01:31.232452-08:00  0     INFO   170.255.255.218  GET   /fmi/odata/v4	 75'
+		'head': 'TIMESTAMP                         CODE  LEVEL  HOST             OP    ENDPOINT  SIZE',
+		'tbst': [35,41,48,65,71]  # 'size' value will be padded on end
+		#		  '2025-10-14T13:01:31.232452  0     INFO   GET   /fmi/odata/v4	 75'
+		'shed': 'TIMESTAMP                   CODE  LEVEL  OP    ENDPOINT  SIZE',
+		'shtb': [29,35,48]
+	}
+	'scriptevent':
+		'path': 'Logs/scriptEvent.log',
+		#        ---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
+		#			2025-08-11 03:00:26.470 -0700  401   Schedule "daily mailing" scripting error (401) at "TOOL : delete mailing batches without queued logs [PSoS] : 22 : Perform Find".
+		'head': 'TIMESTAMP                ZONE  CODE  MESSAGE',
+		'tbst': [32,38],
+		#			2025-08-11 03:00:26.470  401   Schedule "daily mailing" scripting error (401) at "TOOL : delete mailing batches without queued logs [PSoS] : 22 : Perform Find".
+		'shtb': [26,32],
+	},
+	
+	'stats': {
+		'path': 'Logs/Stats.log',
+		#        ---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------1---------2---------3---------4---------5---------6---------7---------8---------
+		'head': '                               NET      NET       DISK       DISK        CACHE   CACHE     PRO      OPEN  CLIENTS  CLIENTS  CLIENTS  CALLS/s   CALLS   TIME     TIME     TIME     CLIENTS' + \
+				  'TIMESTAMP                ZONE  KB/s In  KB/s OUT  KB/s READ  KB/s WRITE  HIT %   UNSAVD %  CLIENTS  DBS   XDBC     WEBD     CWP      COMPLETE  ACTIVE  ELAPSED  WAIT     I/O      GO',
+		'tbst': [32,41,51,62,74,82,92,101,107,116,125,134,144,152,161,170,179]
+		'shed': '                         NET      NET       DISK       DISK        CACHE   CACHE     PRO      OPEN  CLIENTS  CLIENTS  CLIENTS  CALLS/s   CALLS   TIME     TIME     TIME     CLIENTS' + \
+				  'TIMESTAMP                KB/s In  KB/s OUT  KB/s READ  KB/s WRITE  HIT %   UNSAVD %  CLIENTS  DBS   XDBC     WEBD     CWP      COMPLETE  ACTIVE  ELAPSED  WAIT     I/O      GO',
+		'shtb': [26,35,45,56,68,76,86,95,101,110,119,128,138,146,155,164,173]
+	},
+	
+	'stderrserverscripting':
+		'path': 'Logs/StdErrServerScripting.log',
+		'head': None,
+		'tbst': []
+	}
+
 }
 
 LOG_PATHS_STANDARD = {
-    'access': 'Logs/Access.log',
-    'admin': 'Admin/FAC/logs/fac.log',
-    'clientstats': 'Logs/ClientStats.log',
-    'dapi': 'Logs/fmdapi.log',
-    'events': 'Logs/Event.log',
-    'fac': 'Admin/FAC/logs/fac.log',
-    'fmsadmindebug': 'Database Server/bin/fmsadminDebug.log',
-    'fmsasedebug': 'Database Server/bin/fmsaseDebug.log',
-    'fmscwpc': 'Database Server/bin/fmscwpc',
-    'fmscwpcli': 'Database Server/bin/fmscwpcli.log',
-    'fmslogdebug': 'Database Server/bin/fmslogDebug.log',
-    'fmsdebug': 'Database Server/bin/fmsDebug',
-    'fmwipd': 'Database Server/bin/fmwipd.log',
-    'fmsgetpasskeyebug': 'Database Server/bin/fmsgetpasskeyDebug.log',
-    'fmshdebug': 'Database Server/bin/fmshDebug.log',
-    'fmshelper': 'Logs/fmshelper.log',
-    'fmslogdebug': 'Database Server/bin/fmslogDebug.log',
-    'fmodatadebug': 'Database Server/bin/fmodataDebug.log',
-    'fmsgetpasskeyebug': 'Database Server/bin/fmsgetpasskeyDebug.log',
-    'loadschedules': 'Logs/LoadSchedules.log',
-    'install': 'Logs/install.log',
-    'odata': 'Logs/fmodata.log',
-    'scriptevent': 'Logs/scriptEvent.log',
-    'stats': 'Logs/Stats.log',
-    'topcall': 'Logs/TopCallStats.log',
-    'trimlog': 'Database Server/bin/trimlog.log',
-    'wpe': 'Logs/wpe0.log',
-    'wpedebug': 'Logs/wpe_debug.log'
+	'access': 'Logs/Access.log',
+	'admin': 'Admin/FAC/logs/fac.log',
+	'clientstats': 'Logs/ClientStats.log',
+	'dapi': 'Logs/fmdapi.log',
+	'events': 'Logs/Event.log',
+	'fac': 'Admin/FAC/logs/fac.log',
+	'fmsadmindebug': 'Database Server/bin/fmsadminDebug.log',
+	'fmsasedebug': 'Database Server/bin/fmsaseDebug.log',
+	'fmscwpc': 'Database Server/bin/fmscwpc',
+	'fmscwpcli': 'Database Server/bin/fmscwpcli.log',
+	'fmslogdebug': 'Database Server/bin/fmslogDebug.log',
+	'fmsdebug': 'Database Server/bin/fmsDebug',
+	'fmwipd': 'Database Server/bin/fmwipd.log',
+	'fmsgetpasskeyebug': 'Database Server/bin/fmsgetpasskeyDebug.log',
+	'fmshdebug': 'Database Server/bin/fmshDebug.log',
+	'fmshelper': 'Logs/fmshelper.log',
+	'fmslogdebug': 'Database Server/bin/fmslogDebug.log',
+	'install': 'Logs/install.log',
+	'fmsgetpasskeyebug': 'Database Server/bin/fmsgetpasskeyDebug.log',
+	'loadschedules': 'Logs/LoadSchedules.log',
+	'odata': 'Logs/fmodata.log',
+	'odatadebug': 'Database Server/bin/fmodataDebug.log',
+	'scriptevent': 'Logs/scriptEvent.log',
+	'stats': 'Logs/Stats.log',
+	'topcall': 'Logs/TopCallStats.log',
+	'trimlog': 'Database Server/bin/trimlog.log',
+	'wpe': 'Logs/wpe0.log',
+	'wpedebug': 'Logs/wpe_debug.log'
 }
 
 LOG_PATHS_LINUX = {
-    'stderrserverscripting': 'Logs/StdErrServerScripting.log',
-    'stdoutserverscripting': 'Logs/StdOutServerScripting.log',
-#    'syslog': '/var/log/syslog'
+	'stderrserverscripting': 'Logs/StdErrServerScripting.log',
+	'stdoutserverscripting': 'Logs/StdOutServerScripting.log',
+#	'syslog': '/var/log/syslog'
 }
 LOG_PATHS_LINUX.update (LOG_PATHS_STANDARD)
 
 LOG_PATHS_DARWIN = {
-    'stderr': 'Logs/stderr',
-    'stdout': 'Logs/stdout',
-#    'syslog': '/var/log/system.log'
+	'stderr': 'Logs/stderr',
+	'stdout': 'Logs/stdout',
+	#'syslog': '/var/log/system.log'
 }
 
 LOG_PATHS_DARWIN.update (LOG_PATHS_STANDARD)
@@ -111,9 +217,9 @@ LOG_PATHS_DARWIN.update (LOG_PATHS_STANDARD)
 LOG_PATHS_WINDOWS = LOG_PATHS_STANDARD
 
 LOG_PATHS_ALL = {
-    'Darwin': LOG_PATHS_DARWIN,
-    'Linux': LOG_PATHS_LINUX,
-    'Windows': LOG_PATHS_WINDOWS
+	'Darwin': LOG_PATHS_DARWIN,
+	'Linux': LOG_PATHS_LINUX,
+	'Windows': LOG_PATHS_WINDOWS
 }
 LOG_PATHS = LOG_PATHS_ALL [platform.system()]
 LOG_CHOICES = list (LOG_PATHS.keys())
@@ -125,44 +231,182 @@ print (SET_CHOICES)
 ALL_CHOICES = LOG_CHOICES + SET_CHOICES
 
 def get_log_path (log: str) -> str:
-    return BASE_PATH + LOG_PATHS [log]
+	return BASE_PATH + LOG_PATHS [log]
 
 
 def get_file_timestamps (path: str) -> tuple:
-    """Return a file's creation and modification timestamps"""
-    return (os.path.getmtime(path), pathlib.Path(path).stat().st_mtime)
+	"""Return a file's creation and modification timestamps"""
+	return (os.path.getmtime(path), pathlib.Path(path).stat().st_mtime)
 
 
 def count_fixed_log_references (args: argparse.ArgumentParser) -> int:
-    """Return the number of logs referenced for output, except if following."""
-    return 0
-
+	"""Return the number of logs referenced for output, except if following."""
+	return 0
 
 def setup_parser() -> argparse.ArgumentParser:
-    """Setup parameters used for command interface. Does not attempt to parse."""
-    
-    parser = argparse.ArgumentParser(
-        prog='fmslogs',
-        add_help=False,
-        description='View FileMaker Server logs and set logging options')
+	"""Setup parameters used for command interface. Does not attempt to parse."""
 
-    parser.add_argument('-f', '--filter', nargs=1, help='only return lines matching regex expression')
-    parser.add_argument('-h', '--head', nargs='*', help='display the start of the specified log file')
-    parser.add_argument('--help', action='help', help='display command details')
-    parser.add_argument('-l', '--list', action='store_true', help='list all log files, including size, date created & modified, sorted by modification time')
-    parser.add_argument('-L', '--lognames', action='store_true', help='list log names supported by command')
-    parser.add_argument('-m', '--merge', action='store_true', help='combine output of two or more logs')
-    parser.add_argument('-r', '--range', nargs=1, default='1S', help='range or number of lines to print')
-    parser.add_argument('-S', '--set', nargs=1, type=int, help='change log configuration option')
-    parser.add_argument('-s', '--succinct', action='store_true', help='strip less useful details from log output')
-    parser.add_argument('-t', '--tail', action='store_true', help='wait for any new messages after printing current end of log')
-    parser.add_argument('--truncate', nargs='?', action='store_true', help='cut off any output if beyond width of screen')
-    parser.add_argument('-v', '--version', action='store_true', help='version info')
-    # Hack to avoid error if there is only an option specified but no positional argument
-    parser.add_argument('log1', nargs='?', choices=ALL_CHOICES, help='log name to display')
-    parser.add_argument('log2', nargs='?', help='additional log to display')
+	parser = argparse.ArgumentParser(
+		prog='fmslogs',
+		add_help=False,
+		description='View FileMaker Server logs and set logging options')
 
-    return parser
+	parser.add_argument('-d', '--date', nargs=1, help='attempt to restrict messages to starting date or timestamp')
+	parser.add_argument('-f', '--filter', nargs=1, help='only return lines matching regex expression')
+	parser.add_argument('-h', '--head', nargs='*', help='display the start of the specified log file')
+	parser.add_argument('--help', action='help', help='display command details')
+	parser.add_argument('-l', '--list', action='store_true', help='list all log files, including size, date created & modified, sorted by modification time')
+	parser.add_argument('-L', '--lognames', action='store_true', help='list log names supported by command')
+	parser.add_argument('-m', '--merge', action='store_true', help='combine output of two or more logs')
+	parser.add_argument('-n', '--number', nargs=1, default='1S', help='range or number of lines to print')
+	parser.add_argument('-S', '--set', nargs=1, type=int, help='change log configuration option')
+	parser.add_argument('-s', '--succinct', action='store_true', help='strip less useful details from log output')
+	parser.add_argument('-t', '--tail', action='store_true', help='wait for any new messages after printing current end of log')
+	parser.add_argument('--truncate', nargs='?', action='store_true', help='cut off any output if beyond width of screen')
+	parser.add_argument('-v', '--version', action='store_true', help='version info')
+	# Hack to avoid error if there is only an option specified but no positional argument
+	parser.add_argument('log1', nargs='?', choices=ALL_CHOICES, help='log name to display')
+	parser.add_argument('log2', nargs='?', help='additional log to display')
+
+	return parser
+
+#
+#	r e a d _ t a i l _ f i l t e r e d
+#
+
+def read_tail_filtered (filePath: str, linesFromEnd: int) -> list:
+	"""
+	Search file for any matching lines, return up to linesFromEnd
+	line numbers from the end of file that match. Line numbers are base 1
+	for use with linecache.getline.
+	"""
+	
+	matching = []
+	lineNum = 1
+	while True:
+		line = linecache.getline (filePath, lineNum)
+		if line == '': break
+		if FILTER_REGEX.search (line):
+			matching.append (lineNum)
+		lineNum += 1
+	
+	return matching [-linesFromEnd:]
+
+#
+#	f i n d _ f i r s t _ t i m e s t a m p
+#
+
+def find_first_timestamp (filePath: str, timestamp: datetime) -> int:
+	
+	"""
+	Scan file until the first log timestamp equal or greater than the search
+	timestamp is found, returning the line number (base 1) of matching line.
+	If a match is never found -1 is returned.
+	"""
+	
+	lineResult = -1
+	lineNum = 0
+	
+	while True:
+		lineTS = None
+		lineNum += 1
+		line = linecache.getline (filePath, lineNum)
+		if line == '': break
+		# Sniff the line to guess the date format.
+		try:
+			if line[4] == '-' and line [24] == '-':
+				# Access, ClientStats, Event, Stats, etc.
+				# 2025-10-27 04:13:24.101 -0700	Information	228	tool.beezwax.net	The previous log file reached maximum size, and was renamed to "Access-old.log".
+				lineTS = datetime.datetime.fromisoformat(line [:23])
+			elif line [4] == '/' and line [24] == ':':
+				# 2025/10/25 17:49:09.0162
+				lineTS = datetime.strptime(line [:23], "%Y/%m/%d %H:%M:%S.%f")
+			elif line [6] == ',' and line [22] in 'APM':
+				# Sep 11, 2025 12:40:52 PM org.atmosphere.cpr.AtmosphereFramework addInterceptorToAllWrappers
+				# Oct 22, 2025 2:16:56 PM org.atmosphere.util.IOUtils guestRawServletPath
+				lineTS = datetime.datetime.strptime(line [:24].rstrip(), '%b %d, %Y %I:%M:%S %p')
+			elif line [:7] == 'Thrift:':
+				# Thrift: Sat Jun  7 10:47:03 2025
+				lineTS = datetime.datetime.strptime (line [8:32], '%a %b %d %H:%M:%S %Y')
+			else:
+				continue
+		
+		# Skip over any lines that have too few characters (very few) or where we can't evaluate date.
+		
+		except IndexError:
+			continue
+		#except ValueError:
+		#	continue
+
+		# If we reached the timestamp, go into next while loop to match by text value.
+		if lineTS != None and timestamp <= lineTS:
+			lineResult = lineNum
+			break
+	
+	return lineResult
+
+
+#
+#	r e a d _ t a i l _ f i l t e r _ a n d _ t i m e
+#
+
+def read_tail_filtered_and_time (filePath: str, linesFromEnd: int) -> list:
+	"""
+	Search file for any matching lines that are on or after the matching timestamp.
+	From there, then return line numbers from the end of file that match the text filter.
+	Line numbers are base 1 for use with linecache.getline.
+	"""
+	
+	matching = []
+	lastTimeLine = -1
+	
+	# First, find the first line containing some kind of message date
+	# that is on or after our start date.
+	
+	lineNum = find_first_timestamp (filePath, TIMESTAMP_START)
+	
+	if lineNum > 0:
+		# Now, filter anything after start date.
+		while True:
+			line = linecache.getline (filePath, lineNum)
+
+			if line == '': break
+
+			if FILTER_REGEX.search (line):
+				matching.append (lineNum)
+			lineNum += 1
+	
+	# Cut result down to no more than requested lines from end of file.
+	return matching [-linesFromEnd:]
+
+
+def expand_tabs_for_line(line: str, tabstops) -> str:
+	"""
+	Expands tabs in the string `line` using the given tabstops.
+	`tabstops` can be a list of column positions (e.g., [4, 8, 12]) or a single integer for fixed tab width.
+	"""
+	if isinstance(tabstops, int):
+		return line.expandtabs(tabstops)
+
+	result = []
+
+	parts = line.split('\t')
+	col = 0
+	tab_iter = iter(tabstops)
+	next_tab = next(tab_iter, None)
+	for i, part in enumerate(parts):
+		result.append(part)
+		col += len(part)
+		if i < len(parts) - 1:
+			if next_tab is not None and col < next_tab:
+				spaces = next_tab - col
+				result.append(' ' * spaces)
+				col = next_tab
+				next_tab = next(tab_iter, None)
+			else:
+				result.append('  ')	# pad two spaces if no stop specified
+				col += 1
+	return ''.join(result)
 
 
 def init_curses():
@@ -242,22 +486,27 @@ def list_logs():
 
 def process_log_line (line: str, logName: str, useSuccinct: bool)
 
-    # line matches filter?
-    # within date range?
-    # using succinct and log supports it?
-    #   strip timestamps
-    #   strip hostnames
-    #   adjust header
-    # need to detab?
-    #   detab using log's tab stop
-    # truncating?
-    #   truncate line
+	# line matches filter?
+	# within date range?
+	# using succinct and log supports it?
+	#   strip timestamps
+	#   strip hostnames
+	#   adjust header
+	# need to detab?
+	#   detab using log's tab stop
+	# truncating?
+	#   truncate line
 
-    if FILTER_REGEX.search (line):
-        textWrap = textwrap.TextWrapper(width=120,tabsize=10)   # TODO: don't instantiate this once for every line
-        line = textWrap (line)
-        if useSuccinct and len (line) > 28 and line[0] == '2':  # presumably start of 4 digit year
-            line = line [:23] + [29:]   # remove timeezone
+	if FILTER_REGEX.search (line):
+		columns = line.split ('\t')
+	 
+		  
+		if useSuccinct:
+	        line = expand_tabs_for_line(10)
+
+        if logname in ['access','clientstats','event'] and len (columns[0]) > 28 and columns[0][0] == '2':  # presumably start of 4 digit year
+            columns[0] = columns[0] [:23] + [29:]   # remove timeezone
+            columns.pop (3) # remove hostname field
 
 
 
@@ -333,16 +582,30 @@ def handle_head (logNames: list):
     for log in logNames:
         print_file_head (get_log_path(log), SCREENROWS)
 
+#
+#	p r i n t _ l o g _ t a i l
+#
 
-def show_file_tail (filePath: str, lines: int) -> bool:
+def print_log_tail (logName: str, count: int, header: bool, succinct: bool) -> bool:
     
-    """Print up to 'lines' number of lines of text from the end of the file at path.
-    Result is False if there was an error opening or reading the file."""
+    """
+    Print up to 'count' number of lines of text from the end of the file at path.
+    Result is False if there was an error opening or reading the file.
+    If 'header' is true, display the log headers (if any) as first line.
+    If 'succinct' is true, strip less useful info from lines.
+    """
     
     result = False
-    iter = 0
-    bufSize = 8192
-    fileSize = os.stat(fname).st_size
+    
+    logPath = LOG_SPECS [logName]['path']
+    
+    if header:
+    	if succinct:
+    		print (LOG_SPECS [logName]['shed'])
+		else:
+			print (LOG_SPECS [logName]['head'])
+	
+	if xxxxx
     
     with open(filePath, 'r') as f:
         if bufSize > fileSize:
@@ -419,3 +682,49 @@ def main():
 
 if __name__=="__main__":
     main()
+
+
+def read_tail_filtered (filePath: str, linesFromEnd: int) -> list:
+	"""
+	Search file for any matching lines, return up to linesFromEnd
+	line numbers from the end of file that match. Line numbers are base 1
+	for use with linecache.getline.
+	"""
+	
+	matching = []
+	lineNum = 1
+	while True:
+		line = linecache.getline (filePath, lineNum)
+		if line == '': break
+		if FILTER_REGEX.search (line):
+			matching.append (lineNum)
+		lineNum += 1
+	
+	return matching [-linesFromEnd:]
+		
+
+
+
+
+"""
+def read_head:
+
+while
+	read line
+	if EOF: break
+	if filter match:
+		add line
+		if line count > desired lines:
+			break
+
+		
+def read_tail (linesFromEnd):
+
+	if filter specified:
+		for every line:
+			if line matches:
+				x.append (lineNo)
+		
+	 = file size / 200
+	
+"""
