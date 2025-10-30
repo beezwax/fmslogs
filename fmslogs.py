@@ -10,6 +10,7 @@ Purpose: Display FileMaker Server logs and change logging options.
 
 import argparse, curses, linecache, os, pathlib, platform, sys, textwrap, time
 from collections import OrderedDict
+from enum import Enum
 
 """
 non-standard install location?
@@ -37,8 +38,20 @@ FILTER_STR = '.*'   # -f may replace this value
 FILTER_REGEX = None
 TEXTWRAP = textwrap.TextWrapper(width=120,tabsize=10)
 
+class OutputMode (Enum):
+    HEAD = 1
+    TAIL = 2
+	 OTHER = 3
+
+OUTPUT_MODE = OutputMode.TAIL
+SHOW_HEADERS = False
+SUCCINCT_MODE = False
+
 SCREENCOLS, SCREENROWS = os.get_terminal_size()
-MAX_READ_LEN = 1048576*10
+LINE_COUNT = SCREENROWS     # may get overriden by options, or reduced to make room for header
+
+MAXREADLEN = 1048576*10
+
 #LOG_CHOICES = ['access', 'admin', 'clientstats', 'dapi', 'events', 'install', 'odata', 'scriptevent', 'stats', 'stderr', 'stderrserverscripting', 'stdout', 'syslog', 'stats', 'topcall', 'wpe']
 
 # Default deployment paths (Windows paths will have forward slashes converted)
@@ -54,7 +67,7 @@ BASE_PATH = DEF_BASE_PATHS [platform.system()]
 LOG_SPECS = {
 	'access': {
 		'path': 'Logs/Access.log',
-		#        ---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
+		#        ----------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
 		#        2025-09-15 01:12:45.831 -0700  Information  228   some-dev.filemaker.beezwax.net         The previous log file reached maximum size, and was renamed to "Access-old.log".
 		'head': 'TIMESTAMP                      LEVEL        CODE  HOST                                   MESSAGE',
 		'tbst': [32,45,51,90],
@@ -64,7 +77,7 @@ LOG_SPECS = {
 	},
 	'admin': {
 		'path': 'Admin/FAC/logs/fac.log',
-		#        ---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
+		#        ----------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
 		#			2022-05-17 14:29:56 -0700	 Execute /opt/FileMaker/FileMaker Server/Admin/FAC/facstart.sh
 		#			2022-05-17 14:30:00 -0700 - warn:   fmi   127.0.0.1   notifications   general   n/a   "New system notification generated, type: CPU_USAGE_EXCEED_HARD_LIMIT"
 		# Only uses tabs with regular messages (eg, not error or warn) after timestamp.
@@ -75,7 +88,7 @@ LOG_SPECS = {
 	},
 	'clientstats': {
 		'path': 'Logs/ClientStats.log',
-		#        ---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
+		#        ----------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
 		#			2025-10-16 15:46:18.054 -0700  37781   8559   209   0     46442     0    28    Xeronthia Shilnow (XS ETMD6M) [255.143.244.179]
 		'head': '                               NET BYTES  NET BYTES  CALLS      CALLS      TIME       TIME       TIME' + \
 				  'TIMESTAMP                      IN         OUT        COMPLETE   IN PROG    ELAPSED    WAIT       I/O        CLIENT NAME'
@@ -88,7 +101,7 @@ LOG_SPECS = {
 	
 	'dapi': {
 		'path': 'Logs/fmdapi.log',
-		#        ---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
+		#        ----------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
 		#			2025-08-27 11:08:10.055 -0700  4101   ERROR	250.130.228.236  some-user-name   POST  Script Error -- Script File: 'Tool', Script Name: 'create update topic [PSoS]', Script Step: 'Set Field By Name'  0
 		# Size at end (re-arrange columns?). Rarely a 4 digit error code.
 		'head': 'TIMESTAMP	                   CODE   LEVEL   HOST            USER             HTTP  MESSAGE  SIZE',
@@ -151,7 +164,8 @@ LOG_SPECS = {
 	
 	'stats': {
 		'path': 'Logs/Stats.log',
-		#        ---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------1---------2---------3---------4---------5---------6---------7---------8---------
+		#			---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------1---------2---------3---------4---------5---------6---------7---------8---------
+		#			2025-10-17 17:54:42.335 -0700	0	14	11	0	98	0	0	1	0	0	0	2	0	546	40	81	0
 		'head': '                               NET      NET       DISK       DISK        CACHE   CACHE     PRO      OPEN  CLIENTS  CLIENTS  CLIENTS  CALLS/s   CALLS   TIME     TIME     TIME     CLIENTS' + \
 				  'TIMESTAMP                ZONE  KB/s In  KB/s OUT  KB/s READ  KB/s WRITE  HIT %   UNSAVD %  CLIENTS  DBS   XDBC     WEBD     CWP      COMPLETE  ACTIVE  ELAPSED  WAIT     I/O      GO',
 		'tbst': [32,41,51,62,74,82,92,101,107,116,125,134,144,152,161,170,179]
@@ -230,6 +244,33 @@ print (SET_CHOICES)
 
 ALL_CHOICES = LOG_CHOICES + SET_CHOICES
 
+#
+#	s t r i p _ l i n e
+#
+
+def strip_line (logName: str, line: str) -> str:
+	"""
+	When possible, remove repetitive or extraneous text in the logs.
+	This is done after expanding tabs so columns should be at fixed positions.
+	"""
+	
+	if logName in ['access','events':
+		if line [24] == '-':
+			line = line [:23] + line [29:51] + line [90:]		# remove timezone and hostname
+	if logname == 'admin':
+		if line [20] == '-':
+			line = line [:20] + line [26:]							# remove timezone
+	if logName in ['clientstats','dapi','topcall':
+			line = line [:23] + line [29]								# remove timezone
+	if logname == 'dapi':
+			line = line [:23] + line [29:45] + line[62:]			# remove timezone & hostname
+
+	return line
+
+#
+#	g e t _ l o g _ p a t h
+#
+
 def get_log_path (log: str) -> str:
 	return BASE_PATH + LOG_PATHS [log]
 
@@ -251,9 +292,10 @@ def setup_parser() -> argparse.ArgumentParser:
 		add_help=False,
 		description='View FileMaker Server logs and set logging options')
 
-	parser.add_argument('-d', '--date', nargs=1, help='attempt to restrict messages to starting date or timestamp')
+	parser.add_argument('-b', '--begin', nargs=1, help='start at first message on or after time or time interval')
 	parser.add_argument('-f', '--filter', nargs=1, help='only return lines matching regex expression')
 	parser.add_argument('-h', '--head', nargs='*', help='display the start of the specified log file')
+	parser.add_argument('-H', '--headers', action='store_true', help='display column headers as first line for logs with fixed columns')
 	parser.add_argument('--help', action='help', help='display command details')
 	parser.add_argument('-l', '--list', action='store_true', help='list all log files, including size, date created & modified, sorted by modification time')
 	parser.add_argument('-L', '--lognames', action='store_true', help='list log names supported by command')
@@ -271,28 +313,6 @@ def setup_parser() -> argparse.ArgumentParser:
 	return parser
 
 #
-#	r e a d _ t a i l _ f i l t e r e d
-#
-
-def read_tail_filtered (filePath: str, linesFromEnd: int) -> list:
-	"""
-	Search file for any matching lines, return up to linesFromEnd
-	line numbers from the end of file that match. Line numbers are base 1
-	for use with linecache.getline.
-	"""
-	
-	matching = []
-	lineNum = 1
-	while True:
-		line = linecache.getline (filePath, lineNum)
-		if line == '': break
-		if FILTER_REGEX.search (line):
-			matching.append (lineNum)
-		lineNum += 1
-	
-	return matching [-linesFromEnd:]
-
-#
 #	f i n d _ f i r s t _ t i m e s t a m p
 #
 
@@ -301,6 +321,7 @@ def find_first_timestamp (filePath: str, timestamp: datetime) -> int:
 	"""
 	Scan file until the first log timestamp equal or greater than the search
 	timestamp is found, returning the line number (base 1) of matching line.
+	Note that a few logs don't emit timestamps consistently. 
 	If a match is never found -1 is returned.
 	"""
 	
@@ -347,6 +368,62 @@ def find_first_timestamp (filePath: str, timestamp: datetime) -> int:
 
 
 #
+#	e x p a n d _ t a b s _ f o r _ l i n e
+#
+
+def expand_tabs_for_line(line: str, tabstops) -> str:
+	"""
+	Expands tabs in the string `line` using the given tabstops.
+	`tabstops` can be a list of column positions (e.g., [4, 8, 12]) or a single integer for fixed tab width.
+	"""
+	if isinstance(tabstops, int):
+		return line.expandtabs(tabstops)
+
+	result = []
+
+	parts = line.split('\t')
+	col = 0
+	tab_iter = iter(tabstops)
+	next_tab = next(tab_iter, None)
+	for i, part in enumerate(parts):
+		result.append(part)
+		col += len(part)
+		if i < len(parts) - 1:
+			if next_tab is not None and col < next_tab:
+				spaces = next_tab - col
+				result.append(' ' * spaces)
+				col = next_tab
+				next_tab = next(tab_iter, None)
+			else:
+				result.append('  ')	# pad two spaces if no stop specified
+				col += 1
+	return ''.join(result)
+
+
+#
+#	r e a d _ t a i l _ f i l t e r e d
+#
+
+def read_tail_filtered (filePath: str, linesFromEnd: int) -> list:
+	"""
+	Search file for any matching lines, return up to linesFromEnd
+	line numbers from the end of file that match. Line numbers are base 1
+	for use with linecache.getline.
+	"""
+	
+	matching = []
+	lineNum = 1
+	while True:
+		line = linecache.getline (filePath, lineNum)
+		if line == '': break
+		if FILTER_REGEX.search (line):
+			matching.append (lineNum)
+		lineNum += 1
+	
+	return matching [-linesFromEnd:]
+		
+
+#
 #	r e a d _ t a i l _ f i l t e r _ a n d _ t i m e
 #
 
@@ -380,33 +457,34 @@ def read_tail_filtered_and_time (filePath: str, linesFromEnd: int) -> list:
 	return matching [-linesFromEnd:]
 
 
-def expand_tabs_for_line(line: str, tabstops) -> str:
-	"""
-	Expands tabs in the string `line` using the given tabstops.
-	`tabstops` can be a list of column positions (e.g., [4, 8, 12]) or a single integer for fixed tab width.
-	"""
-	if isinstance(tabstops, int):
-		return line.expandtabs(tabstops)
+#
+#	r e a d _ t a i l _ t i m e
+#
 
-	result = []
+def read_tail_time (filePath: str, linesFromEnd: int) -> list:
+	"""
+	Search file for any matching lines that are on or after the matching timestamp.
+	Then return line numbers from the end of file that match the text filter.
+	Line numbers are base 1 for use with linecache.getline.
+	"""
 
-	parts = line.split('\t')
-	col = 0
-	tab_iter = iter(tabstops)
-	next_tab = next(tab_iter, None)
-	for i, part in enumerate(parts):
-		result.append(part)
-		col += len(part)
-		if i < len(parts) - 1:
-			if next_tab is not None and col < next_tab:
-				spaces = next_tab - col
-				result.append(' ' * spaces)
-				col = next_tab
-				next_tab = next(tab_iter, None)
-			else:
-				result.append('  ')	# pad two spaces if no stop specified
-				col += 1
-	return ''.join(result)
+	matching = []
+	
+	# First, find the first line containing some kind of message date
+	# that is on or after our start date.
+	
+	lineNum = find_first_timestamp (filePath, TIMESTAMP_START)
+
+	# Find the last line
+	while True:
+		line = linecache.getline (filePath, lineNum)
+		if line == '': break
+		# TODO: purge line list when it gets too big
+		matching.append (lineNum)
+		lineNum += 1
+
+	# Cut result down to no more than requested lines from end of file.
+	return matching [-linesFromEnd:]
 
 
 def init_curses():
@@ -417,30 +495,34 @@ def init_curses():
     STDSCR.scrollok(1)
 
 
-def tail_F(some_file):
-    first_call = True
-    while True:
-        try:
-            with open(some_file) as input:
-                if first_call:
-                    input.seek(0, 2)
-                    first_call = False
-                latest_data = input.read()
-                while True:
-                    if '\n' not in latest_data:
-                        latest_data += input.read()
-                        if '\n' not in latest_data:
-                            yield ''
-                            if not os.path.isfile(some_file):
-                                break
-                            continue
-                    latest_lines = latest_data.split('\n')
-                    if latest_data[-1] != '\n':
-                        latest_data = latest_lines[-1]
-                    else:
-                        latest_data = input.read()
-                    for line in latest_lines[:-1]:
-                        yield line + '\n'
+def follow_file(some_file):
+	"""
+	was tail_F
+	Capture output as it is added to the file.
+	"""
+	first_call = True
+	while True:
+		try:
+			with open(some_file) as input:
+				if first_call:
+					input.seek(0, 2)
+					first_call = False
+				latest_data = input.read()
+				while True:
+					if '\n' not in latest_data:
+						latest_data += input.read()
+						if '\n' not in latest_data:
+							yield ''
+							if not os.path.isfile(some_file):
+								break
+							continue
+				  latest_lines = latest_data.split('\n')
+				  if latest_data[-1] != '\n':
+						latest_data = latest_lines[-1]
+				  else:
+						latest_data = input.read()
+				  for line in latest_lines[:-1]:
+						yield line + '\n'
         except IOError:
             yield ''
 
@@ -479,34 +561,6 @@ def list_logs():
             print('{:18} {:>10}  {:>24}'.format (log, size, modTimestamp))
         else:
             print('{:18}            <missing>'.format (log))
-
-#
-#   p r o c e s s _ l o g _ l i n e
-#
-
-def process_log_line (line: str, logName: str, useSuccinct: bool)
-
-	# line matches filter?
-	# within date range?
-	# using succinct and log supports it?
-	#   strip timestamps
-	#   strip hostnames
-	#   adjust header
-	# need to detab?
-	#   detab using log's tab stop
-	# truncating?
-	#   truncate line
-
-	if FILTER_REGEX.search (line):
-		columns = line.split ('\t')
-	 
-		  
-		if useSuccinct:
-	        line = expand_tabs_for_line(10)
-
-        if logname in ['access','clientstats','event'] and len (columns[0]) > 28 and columns[0][0] == '2':  # presumably start of 4 digit year
-            columns[0] = columns[0] [:23] + [29:]   # remove timeezone
-            columns.pop (3) # remove hostname field
 
 
 
@@ -575,18 +629,41 @@ def print_file_head (logName:str, lines:int) -> bool:
     return True
 
 #
-#   h a n d l e _ h e a d
+#   p r i n t _ h e a d
 #
 
-def handle_head (logNames: list):
-    for log in logNames:
-        print_file_head (get_log_path(log), SCREENROWS)
+def print_head (logName: str, count: int, header: bool, succinct: bool) -> bool:
+    
+	matching = []
+	
+	# First, find first line containing some kind of message date
+	# that is on or after our start date.
+	
+	print_log_header(logName, succinct)
+	result = False
+	lineNum = find_first_timestamp (filePath, TIMESTAMP_START)
+	
+	if lineNum > 0:
+		maxLine = lineNum + count
+		result = True
+		
+		while True:
+			line = linecache.getline (filePath, lineNum)
+			if line == '': break
+			if FILTER_REGEX.search (line):
+				matching.append (lineNum)
+			lineNum += 1
+			if lineNum > maxLine then break
+	
+	# TODO: should result be: there is more data, that the file exists, or that something was printed?
+	return result
 
+    
 #
-#	p r i n t _ l o g _ t a i l
+#	p r i n t _ t a i l
 #
 
-def print_log_tail (logName: str, count: int, header: bool, succinct: bool) -> bool:
+def print_tail (logName: str, count: int, header: bool, succinct: bool) -> bool:
     
     """
     Print up to 'count' number of lines of text from the end of the file at path.
@@ -596,36 +673,56 @@ def print_log_tail (logName: str, count: int, header: bool, succinct: bool) -> b
     """
     
     result = False
+    lineList = []
+    lineCount = LINE_COUNT
     
-    logPath = LOG_SPECS [logName]['path']
+    logPath =  get_log_path (logName)
+    headerUsed = False
     
     if header:
-    	if succinct:
-    		print (LOG_SPECS [logName]['shed'])
+        # TODO: only print headers if there's log output
+        try:
+            if succinct:
+                print (LOG_SPECS [logName]['shed'])
+                lineCount -= 1 # TODO: check if header is two lines
+            else:
+                print (LOG_SPECS [logName]['head'])
+            headerUsed = True
+            
+        except IndexError:
+            pass
+
+    # Below we can files only, creating a list of records to later print.
+    
+    # JUST DETERMINE START LINE AND USE THAT AS PARAM TO SINGLE READ FUNC?
+    
+	if TIMESTAMP_START != None:
+		if FILTER_REGEX != None:
+			lineList = read_tail_filtered_and_time (logPath, lineCount)
 		else:
-			print (LOG_SPECS [logName]['head'])
+			lineList = read_tail_time (logPath, lineCount)
+	else:
+		if FILTER_REGEX != None:
+			lineList = read_tail_filtered (logPath, lineCount)
+		else:
+			lineList = read_tail (logPath, lineCount)
 	
-	if xxxxx
+	if succinct:
+		for lineNum in lineList:
+			line = strip_line (logName, linecache.getline (filePath, lineNum)
+			print (expand_tabs_for_line (line))
+	else:
+		for lineNum in lineList:
+			print (expand_tabs_for_line (linecache.getline (filePath, lineNum)))
     
-    with open(filePath, 'r') as f:
-        if bufSize > fileSize:
-            bufSize = fileSize - 1
-            data = []
-            while True:
-                iter += 1
-                f.seek (fileSize - bufSize * iter)
-                data.extend (f.readlines(MAX_READ_LEN))
-                if len (data) >= lines or f.tell() == 0:
-                    #TODO: truncate if > MAX_READ_LEN
-                    print(''.join(data[-lines:]))
-                    result = True
-                    break
-    
-    return result
+	return result
 
 
 # https://gist.github.com/pylixm/e6bd4f5456740c12e462eecbc66692fb # tail/follow a file
 
+#
+#	c o m p i l e _ f i l t e r
+#
 
 def compile_filter -> bool:
     
@@ -642,89 +739,62 @@ def compile_filter -> bool:
 
 
 def main():
-    parser = setup_parser()
-    args = parser.parse_args()
-    
-    #print(args.count, args.verbose)
-    print ()
-    print (args)
-    print ()
+	global FILTER_STR, OUTPUT_MODE, SHOW_HEADERS, SUCCINCT_MODE
+	
+	parser = setup_parser()
+	args = parser.parse_args()
 
-    #init_curses()
-    
-    while True:
-        if args.lognames:
-            list_log_names()
-            break
-        if args.list:
-            list_logs()
-            break
-        if args.set:
-            # Do first in case enabling a log
-            handle_set (args.set)
-            break
-        if args.filter:
-            FILTER_STR = args.filter
-        
-        if !compile_filter():    # Compile the default or the filter that was just set
-            break               # bad regex
-        
-        if args.head:
-            handle_head (args.head)
-        if args.tail:
-            handle_tail (args.tail)
-        if args.succinct:
-            print ('using succinct mode')
-        
-        break
-        
-    #curses.endwin()
+	#print(args.count, args.verbose)
+	print ()
+	print (args)
+	print ()
+
+	#init_curses()
+
+	while True:
+		if args.lognames:
+			list_log_names()
+			break
+		if args.list:
+			list_logs()
+			break
+		if args.set:
+			# Do first in case enabling a log
+			handle_set (args.set)
+			break
+		if args.filter:
+			FILTER_STR = args.filter
+		  
+		if !compile_filter():	# Compile the default or the filter that was just set
+			break						# bad regex
+	  
+		if args.head:
+			OUTPUT_MODE = OutputMode.HEAD
+		
+		if args.headers:
+			SHOW_HEADERS = True
+		
+		if args.succinct:
+			SUCCINCT_MODE = True
+		
+		if args.log1:
+			if OUTPUT_MODE == OutputMode.TAIL:
+				print_tail (args.log1, LINE_COUNT, SHOW_HEADERS, USE_SUCCINCT)
+			
+			elif OUTPUT_MODE == OutputMode.HEAD:
+				print_head (args.log1, LINE_COUNT, SHOW_HEADERS, USE_SUCCINCT)
+
+		if args.log1:
+			if OUTPUT_MODE == OutputMode.TAIL:
+				print_tail (args.log1, LINE_COUNT, SHOW_HEADERS, USE_SUCCINCT)
+			
+			elif OUTPUT_MODE == OutputMode.HEAD:
+				print_head (args.log1, LINE_COUNT, SHOW_HEADERS, USE_SUCCINCT)
+
+		break
+		
+		#curses.endwin()
 
 if __name__=="__main__":
     main()
 
-
-def read_tail_filtered (filePath: str, linesFromEnd: int) -> list:
-	"""
-	Search file for any matching lines, return up to linesFromEnd
-	line numbers from the end of file that match. Line numbers are base 1
-	for use with linecache.getline.
-	"""
-	
-	matching = []
-	lineNum = 1
-	while True:
-		line = linecache.getline (filePath, lineNum)
-		if line == '': break
-		if FILTER_REGEX.search (line):
-			matching.append (lineNum)
-		lineNum += 1
-	
-	return matching [-linesFromEnd:]
-		
-
-
-
-
-"""
-def read_head:
-
-while
-	read line
-	if EOF: break
-	if filter match:
-		add line
-		if line count > desired lines:
-			break
-
-		
-def read_tail (linesFromEnd):
-
-	if filter specified:
-		for every line:
-			if line matches:
-				x.append (lineNo)
-		
-	 = file size / 200
-	
-"""
