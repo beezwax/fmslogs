@@ -39,9 +39,9 @@ FILTER_REGEX = None
 TEXTWRAP = textwrap.TextWrapper(width=120,tabsize=10)
 
 class OutputMode (Enum):
-    HEAD = 1
-    TAIL = 2
-	 OTHER = 3
+	HEAD = 1
+	TAIL = 2
+	OTHER = 3
 
 OUTPUT_MODE = OutputMode.TAIL
 SHOW_HEADERS = False
@@ -72,7 +72,7 @@ LOG_SPECS = {
 		'head': 'TIMESTAMP                      LEVEL        CODE  HOST                                   MESSAGE',
 		'tbst': [32,45,51,90],
 		#        2025-09-15 01:12:45.831  Information  228   The previous log file reached maximum size, and was renamed to "Access-old.log".
-		'shed': 'TIMESTAMP                LEVEL        CODE  MESSAGE' ),
+		'shed': 'TIMESTAMP                LEVEL        CODE  MESSAGE',
 		'shtb': [26,39,45]
 	},
 	'admin': {
@@ -91,11 +91,11 @@ LOG_SPECS = {
 		#        ----------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
 		#			2025-10-16 15:46:18.054 -0700  37781   8559   209   0     46442     0    28    Xeronthia Shilnow (XS ETMD6M) [255.143.244.179]
 		'head': '                               NET BYTES  NET BYTES  CALLS      CALLS      TIME       TIME       TIME' + \
-				  'TIMESTAMP                      IN         OUT        COMPLETE   IN PROG    ELAPSED    WAIT       I/O        CLIENT NAME'
+				  'TIMESTAMP                      IN         OUT        COMPLETE   IN PROG    ELAPSED    WAIT       I/O        CLIENT NAME',
 		'tbst': [32,43,54,65,76,87,98,109],
 		#			2025-10-16 15:46:18.054  37781    8559    209     0    46442    0     28   Xeronthia Shilnow (XS ETMD6M) [255.143.144.79]
 		'shed': '                         NET BYTES  NET BYTES CALLS     CALLS     TIME      TIME      TIME' + \
-				  'TIMESTAMP                IN         OUT       COMPLETE  IN PROG   ELAPSED   WAIT      I/O       CLIENT NAME'
+				  'TIMESTAMP                IN         OUT       COMPLETE  IN PROG   ELAPSED   WAIT      I/O       CLIENT NAME',
 		'shtb': [26,37,48,59,70,81,92,103]
 	},
 	
@@ -136,7 +136,7 @@ LOG_SPECS = {
 		'tbst': []	# replace any tabs with two spaces
 	},
 	
-	'loadschedules':
+	'loadschedules': {
 		'path': 'Logs/install.log',
 		'head': None,
 		'tbst': []
@@ -147,12 +147,12 @@ LOG_SPECS = {
 		#        ---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
 		#		  '2025-10-14T13:01:31.232452-08:00  0     INFO   170.255.255.218  GET   /fmi/odata/v4	 75'
 		'head': 'TIMESTAMP                         CODE  LEVEL  HOST             OP    ENDPOINT  SIZE',
-		'tbst': [35,41,48,65,71]  # 'size' value will be padded on end
+		'tbst': [35,41,48,65,71],  # 'size' value will be padded on end
 		#		  '2025-10-14T13:01:31.232452  0     INFO   GET   /fmi/odata/v4	 75'
 		'shed': 'TIMESTAMP                   CODE  LEVEL  OP    ENDPOINT  SIZE',
 		'shtb': [29,35,48]
-	}
-	'scriptevent':
+	},
+	'scriptevent': {
 		'path': 'Logs/scriptEvent.log',
 		#        ---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
 		#			2025-08-11 03:00:26.470 -0700  401   Schedule "daily mailing" scripting error (401) at "TOOL : delete mailing batches without queued logs [PSoS] : 22 : Perform Find".
@@ -168,13 +168,13 @@ LOG_SPECS = {
 		#			2025-10-17 17:54:42.335 -0700	0	14	11	0	98	0	0	1	0	0	0	2	0	546	40	81	0
 		'head': '                               NET      NET       DISK       DISK        CACHE   CACHE     PRO      OPEN  CLIENTS  CLIENTS  CLIENTS  CALLS/s   CALLS   TIME     TIME     TIME     CLIENTS' + \
 				  'TIMESTAMP                ZONE  KB/s In  KB/s OUT  KB/s READ  KB/s WRITE  HIT %   UNSAVD %  CLIENTS  DBS   XDBC     WEBD     CWP      COMPLETE  ACTIVE  ELAPSED  WAIT     I/O      GO',
-		'tbst': [32,41,51,62,74,82,92,101,107,116,125,134,144,152,161,170,179]
+		'tbst': [32,41,51,62,74,82,92,101,107,116,125,134,144,152,161,170,179],
 		'shed': '                         NET      NET       DISK       DISK        CACHE   CACHE     PRO      OPEN  CLIENTS  CLIENTS  CLIENTS  CALLS/s   CALLS   TIME     TIME     TIME     CLIENTS' + \
 				  'TIMESTAMP                KB/s In  KB/s OUT  KB/s READ  KB/s WRITE  HIT %   UNSAVD %  CLIENTS  DBS   XDBC     WEBD     CWP      COMPLETE  ACTIVE  ELAPSED  WAIT     I/O      GO',
 		'shtb': [26,35,45,56,68,76,86,95,101,110,119,128,138,146,155,164,173]
 	},
 	
-	'stderrserverscripting':
+	'stderrserverscripting': {
 		'path': 'Logs/StdErrServerScripting.log',
 		'head': None,
 		'tbst': []
@@ -254,13 +254,13 @@ def strip_line (logName: str, line: str) -> str:
 	This is done after expanding tabs so columns should be at fixed positions.
 	"""
 	
-	if logName in ['access','events':
+	if logName in ['access','events']:
 		if line [24] == '-':
 			line = line [:23] + line [29:51] + line [90:]		# remove timezone and hostname
 	if logname == 'admin':
 		if line [20] == '-':
 			line = line [:20] + line [26:]							# remove timezone
-	if logName in ['clientstats','dapi','topcall':
+	if logName in ['clientstats','dapi','topcall']:
 			line = line [:23] + line [29]								# remove timezone
 	if logname == 'dapi':
 			line = line [:23] + line [29:45] + line[62:]			# remove timezone & hostname
@@ -516,92 +516,98 @@ def follow_file(some_file):
 							if not os.path.isfile(some_file):
 								break
 							continue
-				  latest_lines = latest_data.split('\n')
-				  if latest_data[-1] != '\n':
+					latest_lines = latest_data.split('\n')
+					if latest_data[-1] != '\n':
 						latest_data = latest_lines[-1]
-				  else:
+			`		else:
 						latest_data = input.read()
-				  for line in latest_lines[:-1]:
+					for line in latest_lines[:-1]:
 						yield line + '\n'
-        except IOError:
-            yield ''
+		except IOError:
+			yield ''
 
 
 def log_full_path(log: str) -> str:
-    if LOG_PATHS[log][0] != '/':
-        return BASE_PATH + '/' + LOG_PATHS[log]
-    else:
-        return LOG_PATHS[log]
+	if LOG_PATHS[log][0] != '/':
+		return BASE_PATH + '/' + LOG_PATHS[log]
+	else:
+		return LOG_PATHS[log]
 
+#
+#	p r i n t _ l o g _ n a m e s
+#
 
-def list_log_names():
-    """Print out log names as used by command with their expected paths."""
-    print ('LOG NAME           PATH')
-    for log in LOG_CHOICES:
-        print('{:18} {:<40}'.format (log, log_full_path(log)))
+def print_log_names():
+	"""Print out log names as used by command with their expected paths."""
+	print ('LOG NAME           PATH')
+	for log in LOG_CHOICES:
+		print('{:18} {:<40}'.format (log, log_full_path(log)))
 
-def list_logs():
-    """Print one line per supported log with path, size, creation & mod timestamps."""
-    print ('LOG NAME                 SIZE  MODIFIED')
-    for log in LOG_CHOICES:
-        fullPath = log_full_path (log)
-        #TODO: check for permissions issue
-        
-        while True:
-            try:
-                modTime = os.path.getmtime(fullPath)
-            except FileNotFoundError:
-                modTime = 0;
-                break
-            modTimestamp = time.ctime(modTime)
-            size = os.path.getsize(fullPath)
-            break
-        
-        if modTime > 0:
-            print('{:18} {:>10}  {:>24}'.format (log, size, modTimestamp))
-        else:
-            print('{:18}            <missing>'.format (log))
+#
+#	p r i n t _ l o g s
+#
 
+def print_logs():
+	"""Print one line per supported log with path, size, creation & mod timestamps."""
+	print ('LOG NAME                 SIZE  MODIFIED')
+	for log in LOG_CHOICES:
+		fullPath = log_full_path (log)
+		#TODO: check for permissions issue
+
+		while True:
+			try:
+				modTime = os.path.getmtime(fullPath)
+			except FileNotFoundError:
+				modTime = 0;
+				break
+			modTimestamp = time.ctime(modTime)
+			size = os.path.getsize(fullPath)
+			break
+  
+	if modTime > 0:
+		print('{:18} {:>10}  {:>24}'.format (log, size, modTimestamp))
+	else:
+		print('{:18}            <missing>'.format (log))
 
 
 def print_log_header (logName:str) -> bool:
     
-    headerStr = ''
-    
-    try:
-        headerStr = LOG_HEADERS [logName]
-    except:
-        pass
-    
-    print (headerStr)
+	headerStr = ''
+
+	try:
+		headerStr = LOG_HEADERS [logName]
+	except:
+		pass
+
+	print (headerStr)
 
 
 def show_file_head_faster (filePath: str, lines: int) -> bool:
-    
-    """Print up to the given number of lines of text from the start of the file at the provided path.
-    If MAX_READ_LEN is reached, stop output and append a '+++'.
-    Result is False if there was an error opening or reading the file."""
-    
-    result = False
-    
-    if lines > 0:
-        with open (filePath, 'r') as logfile:
-            lines = logfile.readlines (MAX_READ_LEN)
-            for line in lines[0:SCREENROWS-1]:
-                print (line, end="")
-            #STDSCR.erase()
-            #for line in lines:
-            #    STDSCR.addstr(line)
-            result = True
-            if len (lines) == MAX_READ_LEN:
-                # indicate that we reached read limit
-                print ('+++')
-    else:
-        # We never opened the file, but will consider this a success.
-        result = True
-    
-    #STDSCR.getch()
-    return result
+
+	"""Print up to the given number of lines of text from the start of the file at the provided path.
+	If MAX_READ_LEN is reached, stop output and append a '+++'.
+	Result is False if there was an error opening or reading the file."""
+
+	result = False
+
+	if lines > 0:
+		with open (filePath, 'r') as logfile:
+			lines = logfile.readlines (MAX_READ_LEN)
+			for line in lines[0:SCREENROWS-1]:
+				 print (line, end="")
+			#STDSCR.erase()
+			#for line in lines:
+			#    STDSCR.addstr(line)
+			result = True
+			if len (lines) == MAX_READ_LEN:
+				 # indicate that we reached read limit
+				 print ('+++')
+	else:
+		# We never opened the file, but will consider this a success.
+		result = True
+
+	#STDSCR.getch()
+	return result
 
 #
 #   p r i n t _ f i l e _ h e a d
