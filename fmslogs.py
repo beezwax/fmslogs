@@ -33,8 +33,8 @@ open either directory or log file in text editor, eg $EDITOR
 
 """
 
-TIMESTAMP_REGEX = None
-FILTER_STR = '.*'   # -f may replace this value
+VERSION = "0.10 - 2025-11-01"
+TIMESTAMP_START = None
 FILTER_REGEX = None
 TEXTWRAP = textwrap.TextWrapper(width=120,tabsize=10)
 
@@ -44,11 +44,11 @@ class OutputMode (Enum):
 	OTHER = 3
 
 OUTPUT_MODE = OutputMode.TAIL
-SHOW_HEADERS = False
+SHOW_HEADERS = True
 SUCCINCT_MODE = False
 
 SCREENCOLS, SCREENROWS = os.get_terminal_size()
-LINE_COUNT = SCREENROWS     # may get overriden by options, or reduced to make room for header
+LINE_COUNT = SCREENROWS - 1		# Remove row needed for prompt; may get overriden by options, or reduced to make room for header
 
 MAXREADLEN = 1048576*10
 
@@ -69,7 +69,7 @@ LOG_SPECS = {
 		'path': 'Logs/Access.log',
 		#        ----------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
 		#        2025-09-15 01:12:45.831 -0700  Information  228   some-dev.filemaker.beezwax.net         The previous log file reached maximum size, and was renamed to "Access-old.log".
-		'head': 'TIMESTAMP                      LEVEL        CODE  HOST                                   MESSAGE',
+		'head': 'TIMESTAMP                       LEVEL        CODE  HOST                                   MESSAGE',
 		'tbst': [32,45,51,90],
 		#        2025-09-15 01:12:45.831  Information  228   The previous log file reached maximum size, and was renamed to "Access-old.log".
 		'shed': 'TIMESTAMP                LEVEL        CODE  MESSAGE',
@@ -178,8 +178,17 @@ LOG_SPECS = {
 		'path': 'Logs/StdErrServerScripting.log',
 		'head': None,
 		'tbst': []
+	},
+	
+	'topcall': {
+		'path': 'Logs/TopCallStats.log',
+		#        ---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
+		#			2025-10-31 22:12:31.419 -0700   166630.877193  166635.541004  4663811   Query (Find)                     Tool::table(181)::field definitions(356)     509        33         4663811    0        235659   tool-beezwax-net (172.30.8.236) [172.30.8.236]
+		'head': '                               TIME           TIME           TOTAL                                                                                    NET BYTES  NET BYTES  TIME       TIME     TIME\n' + \
+				  'TIMESTAMP                      START          END            ELAPSED   OPERATION                         TARGET                                       IN         OUT        ELAPSED    WAIT     I/O       CLIENT NAME',
+		'tbst': [31,46,61,71,105,150,161,172,183,192,202],
+		'shed': 'TIMESTAMP                 Start T.  End T.  Total Elapsed  Operation         Target  Net Bytes In  Net Bytes Out  Elapsed T.  Wait T.  I/O T.  Client name',
 	}
-
 }
 
 LOG_PATHS_STANDARD = {
@@ -272,7 +281,10 @@ def strip_line (logName: str, line: str) -> str:
 #
 
 def get_log_path (log: str) -> str:
-	return BASE_PATH + LOG_PATHS [log]
+	# TODO: convert Windows paths
+	#print ('basePath:', BASE_PATH)
+	#print ('logPath', LOG_PATHS [log])
+	return BASE_PATH + '/' + LOG_PATHS [log]
 
 
 def get_file_timestamps (path: str) -> tuple:
@@ -295,7 +307,7 @@ def setup_parser() -> argparse.ArgumentParser:
 	parser.add_argument('-b', '--begin', nargs=1, help='start at first message on or after time or time interval')
 	parser.add_argument('-f', '--filter', nargs=1, help='only return lines matching regex expression')
 	parser.add_argument('-h', '--head', nargs='*', help='display the start of the specified log file')
-	parser.add_argument('-H', '--headers', action='store_true', help='display column headers as first line for logs with fixed columns')
+	parser.add_argument('-H', '--headers-off', dest='headers_off', action='store_true', help='turn off headers for all logs')
 	parser.add_argument('--help', action='help', help='display command details')
 	parser.add_argument('-l', '--list', action='store_true', help='list all log files, including size, date created & modified, sorted by modification time')
 	parser.add_argument('-L', '--lognames', action='store_true', help='list log names supported by command')
@@ -398,6 +410,30 @@ def expand_tabs_for_line(line: str, tabstops) -> str:
 				result.append('  ')	# pad two spaces if no stop specified
 				col += 1
 	return ''.join(result)
+
+
+#
+#	r e a d _ t a i l
+#
+
+def read_tail (filePath: str, linesFromEnd: int) -> list:
+	"""
+	Scan lines in file, return up to linesFromEnd line numbers from the end of file.
+	Line numbers are base 1 for use with linecache.getline.
+	"""
+	
+	#print ('filePath:', filePath)
+	
+	matching = []
+	lineNum = 1
+	while True:
+		line = linecache.getline (filePath, lineNum)
+		if line == '': break
+		matching.append (lineNum)
+		lineNum += 1
+	
+	#print ('lineNum:',lineNum, 'matching:',len (matching))
+	return matching [-linesFromEnd:]
 
 
 #
@@ -569,16 +605,24 @@ def print_logs():
 			print('{:18}             <missing>'.format (log))
 
 
-def print_log_header (logName:str) -> bool:
-    
-	headerStr = ''
+def print_log_header (logName:str, succinct: bool) -> int:
+
+	headerStr = None
+	lineCount = 0
 
 	try:
-		headerStr = LOG_HEADERS [logName]
+		if succinct and 'shed' in LOG_SPECS[logName]:
+			headerStr = LOG_SPECS [logName]['shed']
+		else:
+			headerStr = LOG_SPECS [logName]['head']
 	except:
 		pass
 
-	print (headerStr)
+	if headerStr:
+		print (headerStr)
+		lineCount = 1 + headerStr.count ('\n')
+	
+	return lineCount
 
 
 def show_file_head_faster (filePath: str, lines: int) -> bool:
@@ -680,22 +724,15 @@ def print_tail (logName: str, count: int, header: bool, succinct: bool) -> bool:
 	result = False
 	lineList = []
 	lineCount = LINE_COUNT
+	headerCount = 0
 
 	logPath =  get_log_path (logName)
 	headerUsed = False
 	
 	if header:
 		# TODO: only print headers if there's log output
-		try:
-			if succinct:
-				print (LOG_SPECS [logName]['shed'])
-				lineCount -= 1 # TODO: check if header is two lines
-			else:
-				print (LOG_SPECS [logName]['head'])
-				headerUsed = True
-		
-		except IndexError:
-			pass
+		headerCount = print_log_header (logName, succinct)
+		lineCount = lineCount - headerCount
 	
 	# Below we can files only, creating a list of records to later print.
 	
@@ -708,19 +745,36 @@ def print_tail (logName: str, count: int, header: bool, succinct: bool) -> bool:
 			lineList = read_tail_time (logPath, lineCount)
 	else:
 		if FILTER_REGEX != None:
+			print ('filtered')
 			lineList = read_tail_filtered (logPath, lineCount)
 		else:
+			#print ('unfiltered')
 			lineList = read_tail (logPath, lineCount)
 	
-	if succinct:
+	#print ('lineList:', len (lineList))
+	
+	if succinct and 'shtb' in LOG_SPECS['access'].keys():
+		tabStops =  LOG_SPECS [logName]['shtb']
 		for lineNum in lineList:
-			line = strip_line (logName, linecache.getline (filePath, lineNum))
-			print (expand_tabs_for_line (line))
+			line = strip_line (logName, linecache.getline (logPath, lineNum),end='')
+			print (expand_tabs_for_line (line, tabStops))
 	else:
+		tabStops =  LOG_SPECS [logName]['tbst']
 		for lineNum in lineList:
-			print (expand_tabs_for_line (linecache.getline (filePath, lineNum)))
+			print (expand_tabs_for_line (linecache.getline (logPath, lineNum), tabStops),end='')
     
 	return result
+
+#
+#	p r i n t _ v e r s i o n
+#
+
+def print_version():
+
+	print ()
+	print (VERSION)
+	print ('Latest version at: https://github.com/beezwax/fmslogs')
+	print ()
 
 
 # https://gist.github.com/pylixm/e6bd4f5456740c12e462eecbc66692fb # tail/follow a file
@@ -729,25 +783,29 @@ def print_tail (logName: str, count: int, header: bool, succinct: bool) -> bool:
 #	c o m p i l e _ f i l t e r
 #
 
-def compile_filter() -> bool:
-    
+def compile_filter(regex: str) -> bool:
+	
 	global FILTER_REGEX
 	isValid = False
-
+	
 	try:
-		FILTER_REGEX = re.compile(FILTER_STR)
+		FILTER_REGEX = re.compile(regex)
 		isValid = True
 	except re.error as e:       # aliased to PatternError as of 3.13
-		print(f"Regex Error: {e}")
-
+		print(f"Regex Error: {e}\n")
+	
 	return isValid
 
+#
+#	m a i n
+#
 
 def main():
-	global FILTER_STR, OUTPUT_MODE, SHOW_HEADERS, SUCCINCT_MODE
+	global OUTPUT_MODE, SHOW_HEADERS, SUCCINCT_MODE
 	
 	parser = setup_parser()
 	args = parser.parse_args()
+	ignorePositionals = False
 
 	#print(args.count, args.verbose)
 	print ()
@@ -759,42 +817,48 @@ def main():
 	while True:
 		if args.lognames:
 			print_log_names()
-			break
+			ignorePositionals = True
 		if args.list:
 			print_logs()
-			break
+			ignorePositionals = True
 		if args.set:
 			# Do first in case enabling a log
 			handle_set (args.set)
-			break
-		if args.filter:
-			FILTER_STR = args.filter
-		  
-		if compile_filter() == False:	# Compile the default or the filter that was just set
-			break								# bad regex
+			ignorePositionals = True
+		if args.version:
+			print_version()
+			ignorePositionals = True
+		
+		if ignorePositionals: break	# only follow through if not limiting output to the above options
+		
+		if args.begin:
+			print (args.begin[0])
+			if compile_filter (args.begin[0]) == False:	# Compile the default or the filter that was just set
+				break												# bad regex
 	  
 		if args.head:
+			print ('head - turn on')
 			OUTPUT_MODE = OutputMode.HEAD
 		
-		if args.headers:
-			SHOW_HEADERS = True
+		if args.headers_off:
+			SHOW_HEADERS = False
 		
 		if args.succinct:
 			SUCCINCT_MODE = True
 		
 		if args.log1:
-			if OUTPUT_MODE == OutputMode.TAIL:
-				print_tail (args.log1, LINE_COUNT, SHOW_HEADERS, USE_SUCCINCT)
+			if OUTPUT_MODE is OutputMode.TAIL:
+				print_tail (args.log1, LINE_COUNT, SHOW_HEADERS, SUCCINCT_MODE)
 			
-			elif OUTPUT_MODE == OutputMode.HEAD:
-				print_head (args.log1, LINE_COUNT, SHOW_HEADERS, USE_SUCCINCT)
+			elif OUTPUT_MODE is OutputMode.HEAD:
+				print_head (args.log1, LINE_COUNT, SHOW_HEADERS, SUCCINCT_MODE)
 
-		if args.log1:
+		if args.log2:
 			if OUTPUT_MODE == OutputMode.TAIL:
-				print_tail (args.log1, LINE_COUNT, SHOW_HEADERS, USE_SUCCINCT)
+				print_tail (args.log2, LINE_COUNT, SHOW_HEADERS, SUCCINCT_MODE)
 			
 			elif OUTPUT_MODE == OutputMode.HEAD:
-				print_head (args.log1, LINE_COUNT, SHOW_HEADERS, USE_SUCCINCT)
+				print_head (args.log2, LINE_COUNT, SHOW_HEADERS, SUCCINCT_MODE)
 
 		break
 		
