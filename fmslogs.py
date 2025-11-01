@@ -8,19 +8,19 @@ Version: 0.10, 2025-10-27
 Purpose: Display FileMaker Server logs and change logging options.
 """
 
-import argparse, curses, linecache, os, pathlib, platform, sys, textwrap, time
+import argparse, curses, datetime, linecache, os, pathlib, platform, re, sys, textwrap, time
 from collections import OrderedDict
 from enum import Enum
 
 """
 non-standard install location?
 'top' or iostat option
-Show column headers if relevant
 have merged logs
 summarize results where possible (eg, count, min, max, sum)?
 convert table IDs
 paged output
 
+Reset repo:  git fetch origin main; git reset --hard origin/main
 
 fmslogs [show|tail] all|access|dapi|events|fmsdebug|odata|topcall|wpe [-l|--last] [-h|head] [-t|tail]
 
@@ -304,7 +304,7 @@ def setup_parser() -> argparse.ArgumentParser:
 	parser.add_argument('-S', '--set', nargs=1, type=int, help='change log configuration option')
 	parser.add_argument('-s', '--succinct', action='store_true', help='strip less useful details from log output')
 	parser.add_argument('-t', '--tail', action='store_true', help='wait for any new messages after printing current end of log')
-	parser.add_argument('--truncate', nargs='?', action='store_true', help='cut off any output if beyond width of screen')
+	parser.add_argument('--truncate', action='store_true', help='cut off any output if beyond width of screen')
 	parser.add_argument('-v', '--version', action='store_true', help='version info')
 	# Hack to avoid error if there is only an option specified but no positional argument
 	parser.add_argument('log1', nargs='?', choices=ALL_CHOICES, help='log name to display')
@@ -316,7 +316,7 @@ def setup_parser() -> argparse.ArgumentParser:
 #	f i n d _ f i r s t _ t i m e s t a m p
 #
 
-def find_first_timestamp (filePath: str, timestamp: datetime) -> int:
+def find_first_timestamp (filePath: str, timestamp: datetime.datetime) -> int:
 	
 	"""
 	Scan file until the first log timestamp equal or greater than the search
@@ -519,7 +519,7 @@ def follow_file(some_file):
 					latest_lines = latest_data.split('\n')
 					if latest_data[-1] != '\n':
 						latest_data = latest_lines[-1]
-			`		else:
+					else:
 						latest_data = input.read()
 					for line in latest_lines[:-1]:
 						yield line + '\n'
@@ -552,22 +552,21 @@ def print_logs():
 	print ('LOG NAME                 SIZE  MODIFIED')
 	for log in LOG_CHOICES:
 		fullPath = log_full_path (log)
+				
 		#TODO: check for permissions issue
 
-		while True:
-			try:
-				modTime = os.path.getmtime(fullPath)
-			except FileNotFoundError:
-				modTime = 0;
-				break
+		try:
+			modTime = os.path.getmtime(fullPath)
+		except FileNotFoundError:
+			modTime = 0;
+
+
+		if modTime > 0:
 			modTimestamp = time.ctime(modTime)
 			size = os.path.getsize(fullPath)
-			break
-  
-	if modTime > 0:
-		print('{:18} {:>10}  {:>24}'.format (log, size, modTimestamp))
-	else:
-		print('{:18}            <missing>'.format (log))
+			print('{:18} {:>10}  {:>24}'.format (log, size, modTimestamp))
+		else:
+			print('{:18}             <missing>'.format (log))
 
 
 def print_log_header (logName:str) -> bool:
@@ -615,24 +614,24 @@ def show_file_head_faster (filePath: str, lines: int) -> bool:
 
 def print_file_head (logName:str, lines:int) -> bool:
     
-    filePath = LOG_PATHS [logName]
-    lineCount = 0
+	filePath = LOG_PATHS [logName]
+	lineCount = 0
 
-    try:
-        with open(filePath, "r+b") as f:
-            m=mmap.mmap(f.fileno(), 0, prot=mmap.PROT_READ)
-            print_log_header (logName)
-            while True:
-                line=m.readline()
-                if line == '': break
-                if FILTER_REGEX.search (line):
-                    print line.rstrip()
-                    lineCount =+ 1
-    except IOError:
-        print ('File Error:', filePath, 'could not be opened')
-        return False
-    
-    return True
+	try:
+		with open(filePath, "r+b") as f:
+			m=mmap.mmap(f.fileno(), 0, prot=mmap.PROT_READ)
+			print_log_header (logName)
+			while True:
+				line=m.readline()
+				if line == '': break
+				if FILTER_REGEX.search (line):
+					print (line.rstrip())
+					lineCount =+ 1
+	except IOError:
+		print ('File Error:', filePath, 'could not be opened')
+		return False
+
+	return True
 
 #
 #   p r i n t _ h e a d
@@ -659,7 +658,7 @@ def print_head (logName: str, count: int, header: bool, succinct: bool) -> bool:
 			if FILTER_REGEX.search (line):
 				matching.append (lineNum)
 			lineNum += 1
-			if lineNum > maxLine then break
+			if lineNum > maxLine: break
 	
 	# TODO: should result be: there is more data, that the file exists, or that something was printed?
 	return result
@@ -671,36 +670,36 @@ def print_head (logName: str, count: int, header: bool, succinct: bool) -> bool:
 
 def print_tail (logName: str, count: int, header: bool, succinct: bool) -> bool:
     
-    """
-    Print up to 'count' number of lines of text from the end of the file at path.
-    Result is False if there was an error opening or reading the file.
-    If 'header' is true, display the log headers (if any) as first line.
-    If 'succinct' is true, strip less useful info from lines.
-    """
-    
-    result = False
-    lineList = []
-    lineCount = LINE_COUNT
-    
-    logPath =  get_log_path (logName)
-    headerUsed = False
-    
-    if header:
-        # TODO: only print headers if there's log output
-        try:
-            if succinct:
-                print (LOG_SPECS [logName]['shed'])
-                lineCount -= 1 # TODO: check if header is two lines
-            else:
-                print (LOG_SPECS [logName]['head'])
-            headerUsed = True
-            
-        except IndexError:
-            pass
+	"""
+	Print up to 'count' number of lines of text from the end of the file at path.
+	Result is False if there was an error opening or reading the file.
+	If 'header' is true, display the log headers (if any) as first line.
+	If 'succinct' is true, strip less useful info from lines.
+	"""
 
-    # Below we can files only, creating a list of records to later print.
-    
-    # JUST DETERMINE START LINE AND USE THAT AS PARAM TO SINGLE READ FUNC?
+	result = False
+	lineList = []
+	lineCount = LINE_COUNT
+
+	logPath =  get_log_path (logName)
+	headerUsed = False
+	
+	if header:
+		# TODO: only print headers if there's log output
+		try:
+			if succinct:
+				print (LOG_SPECS [logName]['shed'])
+				lineCount -= 1 # TODO: check if header is two lines
+			else:
+				print (LOG_SPECS [logName]['head'])
+				headerUsed = True
+		
+		except IndexError:
+			pass
+	
+	# Below we can files only, creating a list of records to later print.
+	
+   # JUST DETERMINE START LINE AND USE THAT AS PARAM TO SINGLE READ FUNC?
     
 	if TIMESTAMP_START != None:
 		if FILTER_REGEX != None:
@@ -715,7 +714,7 @@ def print_tail (logName: str, count: int, header: bool, succinct: bool) -> bool:
 	
 	if succinct:
 		for lineNum in lineList:
-			line = strip_line (logName, linecache.getline (filePath, lineNum)
+			line = strip_line (logName, linecache.getline (filePath, lineNum))
 			print (expand_tabs_for_line (line))
 	else:
 		for lineNum in lineList:
@@ -730,18 +729,18 @@ def print_tail (logName: str, count: int, header: bool, succinct: bool) -> bool:
 #	c o m p i l e _ f i l t e r
 #
 
-def compile_filter -> bool:
+def compile_filter() -> bool:
     
-    global FILTER_REGEX
-    isValid = False
-    
-    try:
-        FILTER_REGEX = re.compile(FILTER_STR)
-        isValid = True
-    except re.error as e:       # aliased to PatternError as of 3.13
-        print(f"Regex Error: {e}")
+	global FILTER_REGEX
+	isValid = False
 
-    return isValid
+	try:
+		FILTER_REGEX = re.compile(FILTER_STR)
+		isValid = True
+	except re.error as e:       # aliased to PatternError as of 3.13
+		print(f"Regex Error: {e}")
+
+	return isValid
 
 
 def main():
@@ -759,10 +758,10 @@ def main():
 
 	while True:
 		if args.lognames:
-			list_log_names()
+			print_log_names()
 			break
 		if args.list:
-			list_logs()
+			print_logs()
 			break
 		if args.set:
 			# Do first in case enabling a log
@@ -771,8 +770,8 @@ def main():
 		if args.filter:
 			FILTER_STR = args.filter
 		  
-		if !compile_filter():	# Compile the default or the filter that was just set
-			break						# bad regex
+		if compile_filter() == False:	# Compile the default or the filter that was just set
+			break								# bad regex
 	  
 		if args.head:
 			OUTPUT_MODE = OutputMode.HEAD
