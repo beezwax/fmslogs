@@ -7,13 +7,17 @@ Some things that it does that using just tail, head, or Get-Content don't:
 - displays headers for columns
 - uses tab stops that give consistent column values
 - quicker access since you don't have to type full log path
-- limit messages those only after a given timestamp or duration 
+- limit messages those only after a given timestamp or duration
+- lists size and modification dates for all logs
 
 ## WORK IN PROGRESS
 
 Currently Not Working:
-- `-b` or `--begin`: set timestamp limit'
-
+- `-b` or `--begin`: start at first message on or after time or time interval
+- `-m` or `--merge`: combine output of two or more logs based on timestamp
+- `-h` or `--head`: display first messages in log instead of the last (tail)
+- `--truncate`: truncate longer lines instead of wrapping them
+ 
 ---
 
 ```
@@ -26,9 +30,9 @@ positional arguments:
   {access,admin,clientstats,dapi,events,fac,fmodatadebug,fmsadmindebug,fmsasedebug,fmscwpc,fmscwpcli,fmsdebug,fmsgetpasskeyebug,fmshdebug,fmshelper,fmslogdebug,fmwipd,install,loadschedules,odata,scriptevent,stats,stderr,stdout,topcall,trimlog,wpe,wpedebug,interval,clientstats,fmsdebug,logsize,topcall}
 
 options:
-  -b, --begin BEGIN     start at first message on or after time or time interval
-  -f, --filter FILTER   only return lines matching regex expression
-  -h, --head [HEAD ...] display the start of the specified log file
+  -b, --begin BEGIN     start at first message on or after time or time interval in BEGIN
+  -f, --filter FILTER   only return lines matching regex expression FILTER
+  -h, --head            display the start of the specified log files instead of its tail
   --help                display command details
   -H, --headers-off     turn off headers for all logs
   -l, --list            list all log files, including size, date created & modified, sorted by modification time

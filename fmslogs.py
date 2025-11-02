@@ -48,7 +48,8 @@ SHOW_HEADERS = True
 SUCCINCT_MODE = False
 
 SCREENCOLS, SCREENROWS = os.get_terminal_size()
-LINE_COUNT = SCREENROWS - 1		# Remove row needed for prompt; may get overriden by options, or reduced to make room for header
+LINES_PER_LOG = SCREENROWS - 1		# Remove row needed for prompt; may get overriden by options, or reduced to make room for header
+RANGE_MODE = '1s'							# use 1 screen full to display all logs
 
 MAXREADLEN = 1048576*10
 
@@ -90,11 +91,11 @@ LOG_SPECS = {
 		'path': 'Logs/ClientStats.log',
 		#        ----------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
 		#			2025-10-16 15:46:18.054 -0700  37781   8559   209   0     46442     0    28    Xeronthia Shilnow (XS ETMD6M) [255.143.244.179]
-		'head': '                               NET BYTES  NET BYTES  CALLS      CALLS      TIME       TIME       TIME' + \
+		'head': 'ClientStats.log                NET BYTES  NET BYTES  CALLS      CALLS      TIME       TIME       TIME\n' + \
 				  'TIMESTAMP                      IN         OUT        COMPLETE   IN PROG    ELAPSED    WAIT       I/O        CLIENT NAME',
-		'tbst': [32,43,54,65,76,87,98,109],
+		'tbst': [31,42,53,64,75,86,97,108],
 		#			2025-10-16 15:46:18.054  37781    8559    209     0    46442    0     28   Xeronthia Shilnow (XS ETMD6M) [255.143.144.79]
-		'shed': '                         NET BYTES  NET BYTES CALLS     CALLS     TIME      TIME      TIME' + \
+		'shed': 'ClientStats.log                     NET BYTES  NET BYTES CALLS     CALLS     TIME      TIME      TIME\n' + \
 				  'TIMESTAMP                IN         OUT       COMPLETE  IN PROG   ELAPSED   WAIT      I/O       CLIENT NAME',
 		'shtb': [26,37,48,59,70,81,92,103]
 	},
@@ -166,10 +167,10 @@ LOG_SPECS = {
 		'path': 'Logs/Stats.log',
 		#			---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------1---------2---------3---------4---------5---------6---------7---------8---------
 		#			2025-10-17 17:54:42.335 -0700	0	14	11	0	98	0	0	1	0	0	0	2	0	546	40	81	0
-		'head': '                               NET      NET       DISK       DISK        CACHE   CACHE     PRO      OPEN  CLIENTS  CLIENTS  CLIENTS  CALLS/s   CALLS   TIME     TIME     TIME     CLIENTS' + \
-				  'TIMESTAMP                ZONE  KB/s In  KB/s OUT  KB/s READ  KB/s WRITE  HIT %   UNSAVD %  CLIENTS  DBS   XDBC     WEBD     CWP      COMPLETE  ACTIVE  ELAPSED  WAIT     I/O      GO',
-		'tbst': [32,41,51,62,74,82,92,101,107,116,125,134,144,152,161,170,179],
-		'shed': '                         NET      NET       DISK       DISK        CACHE   CACHE     PRO      OPEN  CLIENTS  CLIENTS  CLIENTS  CALLS/s   CALLS   TIME     TIME     TIME     CLIENTS' + \
+		'head': 'Stats.log                      NET      NET       DISK       DISK       CACHE   CACHE     CLIENTS  OPEN  CLIENTS  CLIENTS  CLIENTS  CALLS/s   CALLS   TIME     TIME     TIME     CLIENTS\n' + \
+				  'TIMESTAMP                ZONE  KBs IN   KBs OUT   KBs READ   KBs WRITE  HIT %   UNSAVD %  PRO      DBS   XDBC     WEBD     CWP      COMPLETE  ACTIVE  ELAPSED  WAIT     I/O      GO',
+		'tbst': [31,40,50,61,72,80,90,99,105,114,123,132,142,150,159,168,177],
+		'shed': 'Stats.log                NET      NET       DISK       DISK        CACHE   CACHE     PRO      OPEN  CLIENTS  CLIENTS  CLIENTS  CALLS/s   CALLS   TIME     TIME     TIME     CLIENTS\n' + \
 				  'TIMESTAMP                KB/s In  KB/s OUT  KB/s READ  KB/s WRITE  HIT %   UNSAVD %  CLIENTS  DBS   XDBC     WEBD     CWP      COMPLETE  ACTIVE  ELAPSED  WAIT     I/O      GO',
 		'shtb': [26,35,45,56,68,76,86,95,101,110,119,128,138,146,155,164,173]
 	},
@@ -184,7 +185,7 @@ LOG_SPECS = {
 		'path': 'Logs/TopCallStats.log',
 		#        ---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
 		#			2025-10-31 22:12:31.419 -0700   166630.877193  166635.541004  4663811   Query (Find)                     Tool::table(181)::field definitions(356)     509        33         4663811    0        235659   tool-beezwax-net (172.30.8.236) [172.30.8.236]
-		'head': '                               TIME           TIME           TOTAL                                                                                    NET BYTES  NET BYTES  TIME       TIME     TIME\n' + \
+		'head': 'TopCallStats.log               TIME           TIME           TOTAL                                                                                    NET BYTES  NET BYTES  TIME       TIME     TIME\n' + \
 				  'TIMESTAMP                      START          END            ELAPSED   OPERATION                         TARGET                                       IN         OUT        ELAPSED    WAIT     I/O       CLIENT NAME',
 		'tbst': [31,46,61,71,105,150,161,172,183,192,202],
 		'shed': 'TIMESTAMP                 Start T.  End T.  Total Elapsed  Operation         Target  Net Bytes In  Net Bytes Out  Elapsed T.  Wait T.  I/O T.  Client name',
@@ -253,6 +254,19 @@ print (SET_CHOICES)
 
 ALL_CHOICES = LOG_CHOICES + SET_CHOICES
 
+class terminal_colors:
+   PURPLE = '\033[95m'
+   CYAN = '\033[96m'
+   DARKCYAN = '\033[36m'
+   BLUE = '\033[94m'
+   GREEN = '\033[92m'
+   LIGHT_GRAY = '\033[37m'
+   YELLOW = '\033[93m'
+   RED = '\033[91m'
+   BOLD = '\033[1m'
+   UNDERLINE = '\033[4m'
+   END = '\033[0m'
+
 #
 #	s t r i p _ l i n e
 #
@@ -306,13 +320,13 @@ def setup_parser() -> argparse.ArgumentParser:
 
 	parser.add_argument('-b', '--begin', nargs=1, help='start at first message on or after time or time interval')
 	parser.add_argument('-f', '--filter', nargs=1, help='only return lines matching regex expression')
-	parser.add_argument('-h', '--head', nargs='*', help='display the start of the specified log file')
+	parser.add_argument('-h', '--head', action='store_true', help='display the first lines of log files')
 	parser.add_argument('-H', '--headers-off', dest='headers_off', action='store_true', help='turn off headers for all logs')
 	parser.add_argument('--help', action='help', help='display command details')
 	parser.add_argument('-l', '--list', action='store_true', help='list all log files, including size, date created & modified, sorted by modification time')
 	parser.add_argument('-L', '--lognames', action='store_true', help='list log names supported by command')
-	parser.add_argument('-m', '--merge', action='store_true', help='combine output of two or more logs')
-	parser.add_argument('-n', '--number', nargs=1, default='1S', help='range or number of lines to print')
+	parser.add_argument('-m', '--merge', action='store_true', help='combine output of two or more logs based on the message timestamps')
+	parser.add_argument('-n', '--number', nargs=1, default='1s', help='range or number of lines to print')
 	parser.add_argument('-S', '--set', nargs=1, type=int, help='change log configuration option')
 	parser.add_argument('-s', '--succinct', action='store_true', help='strip less useful details from log output')
 	parser.add_argument('-t', '--tail', action='store_true', help='wait for any new messages after printing current end of log')
@@ -619,8 +633,10 @@ def print_log_header (logName:str, succinct: bool) -> int:
 		pass
 
 	if headerStr:
+		print (terminal_colors.BOLD,end='')
 		print (headerStr)
 		lineCount = 1 + headerStr.count ('\n')
+		print (terminal_colors.END,end='')
 	
 	return lineCount
 
@@ -684,20 +700,25 @@ def print_file_head (logName:str, lines:int) -> bool:
 def print_head (logName: str, count: int, header: bool, succinct: bool) -> bool:
     
 	matching = []
-	
+	logPath =  get_log_path (logName)
+
 	# First, find first line containing some kind of message date
 	# that is on or after our start date.
 	
 	print_log_header(logName, succinct)
 	result = False
-	lineNum = find_first_timestamp (filePath, TIMESTAMP_START)
+	
+	if TIMESTAMP_START != None:
+		lineNum = find_first_timestamp (logPath, TIMESTAMP_START)
+	else:
+		lineNum = 1
 	
 	if lineNum > 0:
 		maxLine = lineNum + count
 		result = True
 		
 		while True:
-			line = linecache.getline (filePath, lineNum)
+			line = linecache.getline (logPath, lineNum)
 			if line == '': break
 			if FILTER_REGEX.search (line):
 				matching.append (lineNum)
@@ -723,7 +744,7 @@ def print_tail (logName: str, count: int, header: bool, succinct: bool) -> bool:
 
 	result = False
 	lineList = []
-	lineCount = LINE_COUNT
+	lineCount = LINES_PER_LOG
 	headerCount = 0
 
 	logPath =  get_log_path (logName)
@@ -801,11 +822,12 @@ def compile_filter(regex: str) -> bool:
 #
 
 def main():
-	global OUTPUT_MODE, SHOW_HEADERS, SUCCINCT_MODE
+	global LINES_PER_LOG, OUTPUT_MODE, RANGE_MODE, SHOW_HEADERS, SUCCINCT_MODE
 	
 	parser = setup_parser()
 	args = parser.parse_args()
 	ignorePositionals = False
+	screenAvail = SCREENROWS - 1	# minus space for prompt line
 
 	#print(args.count, args.verbose)
 	print ()
@@ -835,9 +857,11 @@ def main():
 			print (args.begin[0])
 			if compile_filter (args.begin[0]) == False:	# Compile the default or the filter that was just set
 				break												# bad regex
-	  
+		
+		if args.number:
+			RANGE_MODE = args.number[0]
+		
 		if args.head:
-			print ('head - turn on')
 			OUTPUT_MODE = OutputMode.HEAD
 		
 		if args.headers_off:
@@ -845,20 +869,40 @@ def main():
 		
 		if args.succinct:
 			SUCCINCT_MODE = True
-		
+				
+		if RANGE_MODE.count ('s'):
+			if args.log1 and args.log2:
+				screenAvail = max ([screenAvail, 6])		# make sure at least 3 lines per log even if screen is too small
+				LINES_PER_LOG = (SCREENROWS - 1) // 2
+				# Will have a spare line if available rows are odd
+				linesRemaining = (SCREENROWS - 2) - LINES_PER_LOG
+		else:
+			try:
+				LINES_PER_LOG = int (RANGE_MODE)
+			except ValueError:
+				print ("Error: invalid range")
+				break
+				
 		if args.log1:
 			if OUTPUT_MODE is OutputMode.TAIL:
-				print_tail (args.log1, LINE_COUNT, SHOW_HEADERS, SUCCINCT_MODE)
+				print_tail (args.log1, LINES_PER_LOG, SHOW_HEADERS, SUCCINCT_MODE)
 			
 			elif OUTPUT_MODE is OutputMode.HEAD:
-				print_head (args.log1, LINE_COUNT, SHOW_HEADERS, SUCCINCT_MODE)
-
+				print ('head is on')
+				print_head (args.log1, LINES_PER_LOG, SHOW_HEADERS, SUCCINCT_MODE)
+			else:
+				print ('Error: unknown output mode')
+				break
+		
 		if args.log2:
+			if RANGE_MODE.count ('s'):
+				LINES_PER_LOG = linesRemaining
+			
 			if OUTPUT_MODE == OutputMode.TAIL:
-				print_tail (args.log2, LINE_COUNT, SHOW_HEADERS, SUCCINCT_MODE)
+				print_tail (args.log2, LINES_PER_LOG, SHOW_HEADERS, SUCCINCT_MODE)
 			
 			elif OUTPUT_MODE == OutputMode.HEAD:
-				print_head (args.log2, LINE_COUNT, SHOW_HEADERS, SUCCINCT_MODE)
+				print_head (args.log2, LINES_PER_LOG, SHOW_HEADERS, SUCCINCT_MODE)
 
 		break
 		
