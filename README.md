@@ -15,7 +15,7 @@ Some things that it does that using just tail, head, or Get-Content don't:
 Currently Not Working:
 - `-b` or `--begin`: start at first message on or after time or time interval
 - `-m` or `--merge`: combine output of two or more logs based on timestamp
-- `-h` or `--head`: display first messages in log instead of the last (tail)
+- `-s` or `--set`: set log options
 - `--truncate`: truncate longer lines instead of wrapping them
  
 ---

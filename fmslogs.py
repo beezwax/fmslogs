@@ -47,9 +47,13 @@ OUTPUT_MODE = OutputMode.TAIL
 SHOW_HEADERS = True
 SUCCINCT_MODE = False
 
-SCREENCOLS, SCREENROWS = os.get_terminal_size()
-LINES_PER_LOG = SCREENROWS - 1		# Remove row needed for prompt; may get overriden by options, or reduced to make room for header
-RANGE_MODE = '1s'							# use 1 screen full to display all logs
+try:
+	SCREENCOLS, SCREENROWS = os.get_terminal_size()
+except OSError:
+	SCREENCOLS = 255	# Probably being piped so no terminal
+	SCREENROWS = 48
+	
+RANGE_MODE = None							# use 1 screen full to display all logs
 
 MAXREADLEN = 1048576*10
 
@@ -250,7 +254,6 @@ LOG_CHOICES = list (LOG_PATHS.keys())
 LOG_CHOICES.sort()
 
 SET_CHOICES = ['interval', 'clientstats', 'fmsdebug', 'logsize', 'topcall']
-print (SET_CHOICES)
 
 ALL_CHOICES = LOG_CHOICES + SET_CHOICES
 
@@ -633,9 +636,9 @@ def print_log_header (logName:str, succinct: bool) -> int:
 		pass
 
 	if headerStr:
+		lineCount = 1 + headerStr.count ('\n')
 		print (terminal_colors.BOLD,end='')
 		print (headerStr)
-		lineCount = 1 + headerStr.count ('\n')
 		print (terminal_colors.END,end='')
 	
 	return lineCount
@@ -699,34 +702,46 @@ def print_file_head (logName:str, lines:int) -> bool:
 
 def print_head (logName: str, count: int, header: bool, succinct: bool) -> bool:
     
-	matching = []
+	lineList = []
+	lineCount = LINES_PER_LOG
 	logPath =  get_log_path (logName)
 
 	# First, find first line containing some kind of message date
 	# that is on or after our start date.
 	
-	print_log_header(logName, succinct)
-	result = False
+	if header:
+		headerCount = print_log_header(logName, succinct)
+		lineCount -= headerCount
+	else:
+		headerCount = 0
 	
 	if TIMESTAMP_START != None:
 		lineNum = find_first_timestamp (logPath, TIMESTAMP_START)
 	else:
 		lineNum = 1
 	
+	tabStops =  LOG_SPECS [logName]['tbst']
+
 	if lineNum > 0:
 		maxLine = lineNum + count
 		result = True
 		
+		print (lineNum, count, maxLine)
+		
 		while True:
 			line = linecache.getline (logPath, lineNum)
 			if line == '': break
-			if FILTER_REGEX.search (line):
-				matching.append (lineNum)
+			if FILTER_REGEX != None and FILTER_REGEX.search (line):
+				lineList.append (lineNum)
+			else:
+				lineList.append (lineNum)
 			lineNum += 1
 			if lineNum > maxLine: break
 	
-	# TODO: should result be: there is more data, that the file exists, or that something was printed?
-	return result
+	for lineNum in lineList:
+		print (expand_tabs_for_line (linecache.getline (logPath, lineNum), tabStops),end='')
+			
+	return len (lineList) + headerCount
 
     
 #
@@ -742,19 +757,18 @@ def print_tail (logName: str, count: int, header: bool, succinct: bool) -> bool:
 	If 'succinct' is true, strip less useful info from lines.
 	"""
 
-	result = False
 	lineList = []
-	lineCount = LINES_PER_LOG
-	headerCount = 0
-
-	logPath =  get_log_path (logName)
-	headerUsed = False
+	lineCount = count
 	
+	logPath =  get_log_path (logName)
+	
+	# TODO: only print headers if there's log output
 	if header:
-		# TODO: only print headers if there's log output
 		headerCount = print_log_header (logName, succinct)
 		lineCount = lineCount - headerCount
-	
+	else:
+		headerCount = 0
+
 	# Below we can files only, creating a list of records to later print.
 	
    # JUST DETERMINE START LINE AND USE THAT AS PARAM TO SINGLE READ FUNC?
@@ -772,19 +786,36 @@ def print_tail (logName: str, count: int, header: bool, succinct: bool) -> bool:
 			#print ('unfiltered')
 			lineList = read_tail (logPath, lineCount)
 	
-	#print ('lineList:', len (lineList))
+	# the actual lineCount is now this:
+	lineCount = len (lineList)
 	
 	if succinct and 'shtb' in LOG_SPECS['access'].keys():
 		tabStops =  LOG_SPECS [logName]['shtb']
 		for lineNum in lineList:
 			line = strip_line (logName, linecache.getline (logPath, lineNum),end='')
-			print (expand_tabs_for_line (line, tabStops))
+			try:
+				print (expand_tabs_for_line (line, tabStops))
+			except BrokenPipeError:
+				# Catch errors if output is piped and the other end closes prematurely (eg, using `head`).
+				# Use below to avoid a later error when Python flushes stdout
+				devnull = os.open(os.devnull, os.O_WRONLY)
+				os.dup2(devnull, sys.stdout.fileno())
+				lineCount = -lineCount
+				break
+
 	else:
 		tabStops =  LOG_SPECS [logName]['tbst']
+		
 		for lineNum in lineList:
-			print (expand_tabs_for_line (linecache.getline (logPath, lineNum), tabStops),end='')
-    
-	return result
+			try:
+				print (expand_tabs_for_line (linecache.getline (logPath, lineNum), tabStops),end='')
+			except BrokenPipeError:
+				devnull = os.open(os.devnull, os.O_WRONLY)
+				os.dup2(devnull, sys.stdout.fileno())
+				lineCount = -lineCount
+				break
+	
+	return len (lineList) + headerCount
 
 #
 #	p r i n t _ v e r s i o n
@@ -822,18 +853,15 @@ def compile_filter(regex: str) -> bool:
 #
 
 def main():
-	global LINES_PER_LOG, OUTPUT_MODE, RANGE_MODE, SHOW_HEADERS, SUCCINCT_MODE
+	global OUTPUT_MODE, RANGE_MODE, SHOW_HEADERS, SUCCINCT_MODE
 	
 	parser = setup_parser()
 	args = parser.parse_args()
 	ignorePositionals = False
-	screenAvail = SCREENROWS - 1	# minus space for prompt line
+	screenLinesCounter = 0					# if used, will start (num lines on screen * num screens) - space for prompt line
 
 	#print(args.count, args.verbose)
-	print ()
-	print (args)
-	print ()
-
+	#print (args)
 	#init_curses()
 
 	while True:
@@ -854,13 +882,12 @@ def main():
 		if ignorePositionals: break	# only follow through if not limiting output to the above options
 		
 		if args.begin:
-			print (args.begin[0])
+			#print (args.begin[0])
 			if compile_filter (args.begin[0]) == False:	# Compile the default or the filter that was just set
-				break												# bad regex
+				break													# bad regex
 		
-		if args.number:
-			RANGE_MODE = args.number[0]
-		
+		#print ('type:', type (args.number), args.number)
+				
 		if args.head:
 			OUTPUT_MODE = OutputMode.HEAD
 		
@@ -870,40 +897,57 @@ def main():
 		if args.succinct:
 			SUCCINCT_MODE = True
 				
-		if RANGE_MODE.count ('s'):
-			if args.log1 and args.log2:
-				screenAvail = max ([screenAvail, 6])		# make sure at least 3 lines per log even if screen is too small
-				LINES_PER_LOG = (SCREENROWS - 1) // 2
-				# Will have a spare line if available rows are odd
-				linesRemaining = (SCREENROWS - 2) - LINES_PER_LOG
-		else:
+		logLinesCountVal = args.number[0]
+		linesPerLog = 0
+
+		numLogsToPrint = 0
+		if args.log1: numLogsToPrint += 1
+		if args.log2: numLogsToPrint += 1
+
+		if logLinesCountVal.count ('s'):
+			screensNumStr = logLinesCountVal.replace('s','')
+			if len (screensNumStr) == 0:
+				screensNum = 1		# just an 's' by itself counts as 1'
 			try:
-				LINES_PER_LOG = int (RANGE_MODE)
+				screensNum = int (screensNumStr)
 			except ValueError:
-				print ("Error: invalid range")
+				print ("Error: invalid number")
 				break
+			screenLinesCounter = max ([SCREENROWS * screensNum - 1, 6])
+			
+			if numLogsToPrint == 1:
+				linesPerLog = screenLinesCounter // 2
+			else:
+				linesPerLog = screenLinesCounter
+		else:
+			linesPerLog = int (logLinesCountVal)
 				
+		linesPrinted = 0;
+
 		if args.log1:
 			if OUTPUT_MODE is OutputMode.TAIL:
-				print_tail (args.log1, LINES_PER_LOG, SHOW_HEADERS, SUCCINCT_MODE)
+				linesPrinted = print_tail (args.log1, linesPerLog, SHOW_HEADERS, SUCCINCT_MODE)
 			
 			elif OUTPUT_MODE is OutputMode.HEAD:
-				print ('head is on')
-				print_head (args.log1, LINES_PER_LOG, SHOW_HEADERS, SUCCINCT_MODE)
+				linesPrinted = print_head (args.log1, linesPerLog, SHOW_HEADERS, SUCCINCT_MODE)
 			else:
 				print ('Error: unknown output mode')
 				break
 		
+		if linesPrinted < 0: break
+		screenLinesCounter -= linesPrinted + 1
+		
 		if args.log2:
-			if RANGE_MODE.count ('s'):
-				LINES_PER_LOG = linesRemaining
+			if screenLinesCounter:
+				LINES_PER_LOG = screenLinesCounter
 			
 			if OUTPUT_MODE == OutputMode.TAIL:
-				print_tail (args.log2, LINES_PER_LOG, SHOW_HEADERS, SUCCINCT_MODE)
+				linesPrinted = print_tail (args.log2, linesPerLog, SHOW_HEADERS, SUCCINCT_MODE)
 			
 			elif OUTPUT_MODE == OutputMode.HEAD:
-				print_head (args.log2, LINES_PER_LOG, SHOW_HEADERS, SUCCINCT_MODE)
+				linesPrinted = print_head (args.log2, linesPerLog, SHOW_HEADERS, SUCCINCT_MODE)
 
+		screenLinesCounter -= linesPrinted
 		break
 		
 		#curses.endwin()
