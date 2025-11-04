@@ -19,6 +19,7 @@ have merged logs
 summarize results where possible (eg, count, min, max, sum)?
 convert table IDs
 paged output
+list crash reports
 
 Reset repo:  git fetch origin main; git reset --hard origin/main
 
@@ -43,6 +44,7 @@ class OutputMode (Enum):
 	TAIL = 2
 	OTHER = 3
 
+LAST_FILE_PRINTED = None
 OUTPUT_MODE = OutputMode.TAIL
 SHOW_HEADERS = True
 SUCCINCT_MODE = False
@@ -69,9 +71,18 @@ DEF_BASE_PATHS = {
 # This may get overridden by user option,
 BASE_PATH = DEF_BASE_PATHS [platform.system()]
 
+# path: location of the log file, starting at the base path
+# lghd: True if the log file has a header line at start of file
+# head: header to use if not succinct mode
+# tbst: tab stops to use for columns
+# shed: succinct version of header (may not be present)
+# shtb: succinct version of tab stops
+
+
 LOG_SPECS = {
 	'access': {
 		'path': 'Logs/Access.log',
+		'lghd': True,
 		#        ----------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
 		#        2025-09-15 01:12:45.831 -0700  Information  228   some-dev.filemaker.beezwax.net         The previous log file reached maximum size, and was renamed to "Access-old.log".
 		'head': 'TIMESTAMP                       LEVEL        CODE  HOST                                   MESSAGE',
@@ -82,6 +93,7 @@ LOG_SPECS = {
 	},
 	'admin': {
 		'path': 'Admin/FAC/logs/fac.log',
+		'lghd': False,
 		#        ----------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
 		#			2022-05-17 14:29:56 -0700	 Execute /opt/FileMaker/FileMaker Server/Admin/FAC/facstart.sh
 		#			2022-05-17 14:30:00 -0700 - warn:   fmi   127.0.0.1   notifications   general   n/a   "New system notification generated, type: CPU_USAGE_EXCEED_HARD_LIMIT"
@@ -93,6 +105,7 @@ LOG_SPECS = {
 	},
 	'clientstats': {
 		'path': 'Logs/ClientStats.log',
+		'lghd': True,
 		#        ----------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
 		#			2025-10-16 15:46:18.054 -0700  37781   8559   209   0     46442     0    28    Xeronthia Shilnow (XS ETMD6M) [255.143.244.179]
 		'head': 'ClientStats.log                NET BYTES  NET BYTES  CALLS      CALLS      TIME       TIME       TIME\n' + \
@@ -106,8 +119,9 @@ LOG_SPECS = {
 	
 	'dapi': {
 		'path': 'Logs/fmdapi.log',
+		'lghd': True,
 		#        ----------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
-		#			2025-08-27 11:08:10.055 -0700  4101   ERROR	250.130.228.236  some-user-name   POST  Script Error -- Script File: 'Tool', Script Name: 'create update topic [PSoS]', Script Step: 'Set Field By Name'  0
+		#			2025-08-27 11:08:10.055 -0700  4101   ERROR	250.130.228.236  some-user-name   POST  Script Error -- Script File: 'filename', Script Name: 'create update topic [PSoS]', Script Step: 'Set Field By Name'  0
 		# Size at end (re-arrange columns?). Rarely a 4 digit error code.
 		'head': 'TIMESTAMP	                   CODE   LEVEL   HOST            USER             HTTP  MESSAGE  SIZE',
 		'tbst': [32,39,47,63,81,87],
@@ -118,6 +132,7 @@ LOG_SPECS = {
 	
 	'events': {
 		'path': 'Logs/Event.log',
+		'lghd': True,
 		#        ---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
 		#			2025-08-18 23:15:30.125 -0700  Information  228   some-dev.filemaker.beezwax.net  The previous log file reached maximum size, and was renamed to "Event-old.log".
 		'head': 'TIMESTAMP                ZONE  LEVEL        CODE  HOST                            MESSAGE',
@@ -129,6 +144,7 @@ LOG_SPECS = {
 	
 	'fmshelper': {
 		'path': 'Logs/fmshelper.log',
+		'lghd': True,
 			# This log has no consistent format
 			#		2025-08-03 20:12:38.182 -0700   Log file /opt/FileMaker/FileMaker Server/Logs/fmshelper.log size: 478 bytes (0 MB), threshold ratio: 0
 			#		2025-08-03 20:12:38.185 -0700 === stopSystemWebServer()
@@ -140,15 +156,24 @@ LOG_SPECS = {
 		'head': None,
 		'tbst': []	# replace any tabs with two spaces
 	},
-	
-	'loadschedules': {
+
+	'install': {
 		'path': 'Logs/install.log',
+		'lghd': False,
+		'head': None,
+		'tbst': []
+	},
+
+	'loadschedules': {
+		'path': 'Logs/LoadSchedules.log',
+		'lghd': True,
 		'head': None,
 		'tbst': []
 	},
 
 	'odata': {
 		'path': 'Logs/fmodata.log',
+		'lghd': True,
 		#        ---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
 		#		  '2025-10-14T13:01:31.232452-08:00  0     INFO   170.255.255.218  GET   /fmi/odata/v4	 75'
 		'head': 'TIMESTAMP                         CODE  LEVEL  HOST             OP    ENDPOINT  SIZE',
@@ -159,6 +184,7 @@ LOG_SPECS = {
 	},
 	'scriptevent': {
 		'path': 'Logs/scriptEvent.log',
+		'lghd': False,
 		#        ---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
 		#			2025-08-11 03:00:26.470 -0700  401   Schedule "daily mailing" scripting error (401) at "TOOL : delete mailing batches without queued logs [PSoS] : 22 : Perform Find".
 		'head': 'TIMESTAMP                ZONE  CODE  MESSAGE',
@@ -169,6 +195,7 @@ LOG_SPECS = {
 	
 	'stats': {
 		'path': 'Logs/Stats.log',
+		'lghd': True,
 		#			---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------1---------2---------3---------4---------5---------6---------7---------8---------
 		#			2025-10-17 17:54:42.335 -0700	0	14	11	0	98	0	0	1	0	0	0	2	0	546	40	81	0
 		'head': 'Stats.log                      NET      NET       DISK       DISK       CACHE   CACHE     CLIENTS  OPEN  CLIENTS  CLIENTS  CLIENTS  CALLS/s   CALLS   TIME     TIME     TIME     CLIENTS\n' + \
@@ -181,17 +208,39 @@ LOG_SPECS = {
 	
 	'stderrserverscripting': {
 		'path': 'Logs/StdErrServerScripting.log',
+		'lghd': False,
+		'lghd': False,
 		'head': None,
 		'tbst': []
 	},
 	
+	'stdoutserverscripting': {
+		'path': 'Logs/StdOutServerScripting.log',
+		'lghd': False,
+		'lghd': False,
+		'head': None,
+		'tbst': []
+	},
+
 	'topcall': {
 		'path': 'Logs/TopCallStats.log',
+		'lghd': True,
 		#        ---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
 		#			2025-10-31 22:12:31.419 -0700   166630.877193  166635.541004  4663811   Query (Find)                     Tool::table(181)::field definitions(356)     509        33         4663811    0        235659   tool-beezwax-net (172.30.8.236) [172.30.8.236]
 		'head': 'TopCallStats.log               TIME           TIME           TOTAL                                                                                    NET BYTES  NET BYTES  TIME       TIME     TIME\n' + \
 				  'TIMESTAMP                      START          END            ELAPSED   OPERATION                         TARGET                                       IN         OUT        ELAPSED    WAIT     I/O       CLIENT NAME',
 		'tbst': [31,46,61,71,105,150,161,172,183,192,202],
+		'shed': 'TIMESTAMP                 Start T.  End T.  Total Elapsed  Operation         Target  Net Bytes In  Net Bytes Out  Elapsed T.  Wait T.  I/O T.  Client name',
+	},
+	
+	'wpe': {
+		'path': 'Logs/wpe0.log',
+		'lghd': True,
+		#        ---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
+		#			2023-09-13 11:50:57 -0700  INFO	-	-	User [WebDirect-ABC8F](nnnnnnnnn_n@beezwax.net) has been signed out from database Tool.
+		#			2025-08-04 08:06:10 -0700  172.130.211.135  127.0.0.1:57874  -  -  INFO  -  -  FileMaker WebDirect is enabled.
+		'head': 'TIMESTAMP                  HOSTNAME         CLIENT           ACCOUNT                     MODULE_TYPE  SEVERITY  ERROR  BYTES     MESSAGE',
+		'tbst': [27,44,61,89,102,112,119,129],
 		'shed': 'TIMESTAMP                 Start T.  End T.  Total Elapsed  Operation         Target  Net Bytes In  Net Bytes Out  Elapsed T.  Wait T.  I/O T.  Client name',
 	}
 }
@@ -270,6 +319,25 @@ class terminal_colors:
    UNDERLINE = '\033[4m'
    END = '\033[0m'
 
+
+#
+#	c o m p i l e _ f i l t e r
+#
+
+def compile_filter(regex: str) -> bool:
+	
+	global FILTER_REGEX
+	isValid = False
+	
+	try:
+		FILTER_REGEX = re.compile(regex)
+		isValid = True
+	except re.error as e:       # aliased to PatternError as of 3.13
+		print(f"Regex Error: {e}\n")
+	
+	return isValid
+
+
 #
 #	s t r i p _ l i n e
 #
@@ -292,6 +360,7 @@ def strip_line (logName: str, line: str) -> str:
 			line = line [:23] + line [29:45] + line[62:]			# remove timezone & hostname
 
 	return line
+
 
 #
 #	g e t _ l o g _ p a t h
@@ -329,7 +398,7 @@ def setup_parser() -> argparse.ArgumentParser:
 	parser.add_argument('-l', '--list', action='store_true', help='list all log files, including size, date created & modified, sorted by modification time')
 	parser.add_argument('-L', '--lognames', action='store_true', help='list log names supported by command')
 	parser.add_argument('-m', '--merge', action='store_true', help='combine output of two or more logs based on the message timestamps')
-	parser.add_argument('-n', '--number', nargs=1, default='1s', help='range or number of lines to print')
+	parser.add_argument('-n', '--number', nargs=1, default=['1s'], help='range or number of lines to print')
 	parser.add_argument('-S', '--set', nargs=1, type=int, help='change log configuration option')
 	parser.add_argument('-s', '--succinct', action='store_true', help='strip less useful details from log output')
 	parser.add_argument('-t', '--tail', action='store_true', help='wait for any new messages after printing current end of log')
@@ -340,6 +409,7 @@ def setup_parser() -> argparse.ArgumentParser:
 	parser.add_argument('log2', nargs='?', help='additional log to display')
 
 	return parser
+
 
 #
 #	f i n d _ f i r s t _ t i m e s t a m p
@@ -586,6 +656,141 @@ def log_full_path(log: str) -> str:
 	else:
 		return LOG_PATHS[log]
 
+# =================
+
+class TailPrint (object):
+	
+	# based on https://github.com/kasun/python-tail
+	
+	''' Represents a tail command. '''
+	def __init__(self, logName):
+		'''Initiate a Tail instance.
+			Check for file validity, assigns callback function to standard out.
+			
+			Arguments:
+				tailed_file - File to be followed. '''
+		
+		tailed_file = log_full_path (logName)
+		self.check_file_validity(tailed_file)
+		self.tailed_file = tailed_file
+		self.logName = logName
+		self.callback = sys.stdout.write
+	
+	def follow(self, s=1):
+		''' Do a tail follow. If a callback function is registered it is called with every new line. 
+		Else printed to standard out.
+
+		Arguments:
+			s - Number of seconds to wait between each iteration; Defaults to 1. '''
+		
+		outputActive = False
+		
+		with open(self.tailed_file) as file_:
+			# Go to the end of file
+			while True:
+				curr_position = file_.tell()
+				line = file_.readline()
+				if not line:
+					file_.seek(curr_position)
+					if outputActive:
+						print ()
+						outputActive = False
+					time.sleep(s)
+				else:
+					self.callback(self.logName, line)
+	
+	def register_callback(self, func):
+		''' Overrides default callback function to provided function. '''
+		self.callback = func
+	
+	def check_file_validity(self, file_):
+		''' Check whether the a given file exists, readable and is a file '''
+		if not os.access(file_, os.F_OK):
+			raise TailError("File '%s' does not exist" % (file_))
+		if not os.access(file_, os.R_OK):
+			raise TailError("File '%s' not readable" % (file_))
+		if os.path.isdir(file_):
+			raise TailError("File '%s' is a directory" % (file_))
+
+class TailError(Exception):
+	def __init__(self, msg):
+		self.message = msg
+	def __str__(self):
+		return self.message
+
+
+def tail_print_multifile (logName: str, line: str):
+	"""
+	Print output sent by one or more TailPrint objects. If output transitions to different file
+	indicate change by printing blank line followed by file path.
+	"""
+	
+	if logName != LAST_LOG_PRINTED:
+		if LAST_LOG_PRINTED != None:
+		print ('===', file.name)
+		LAST_LOG_PRINTED = logName
+		print ('===', file.name)
+	
+	print (line)
+
+
+# =================
+
+#
+#	calc_row_metrics
+#
+
+def calc_row_metrics (numLogs, logLinesCountVal) -> tuple:
+
+	screenLinesCount = 0
+
+	if logLinesCountVal.count ('s'):
+		screensNumStr = logLinesCountVal.replace('s','')
+					
+		if len (screensNumStr) == 0:
+			screensNum = 1		# just an 's' by itself counts as 1'
+		try:
+			screensNum = int (screensNumStr)
+		except ValueError:
+			print ("Error: invalid number for number parameter")
+			return (-1,-1)
+			
+		screenLinesCount = max ([SCREENROWS * screensNum - 1, 6])
+		
+		if numLogs == 1:
+			linesPerLog = screenLinesCount
+		else:
+			linesPerLog = screenLinesCount // numLogs
+	
+	else:
+		try:
+			linesPerLog = int (logLinesCountVal)
+		except ValueError:
+			print ("Error: invalid number for number parameter")
+			return (-1,-1)
+	
+	return (linesPerLog,screenLinesCount)
+
+
+#
+#	p r i n t _ l o g
+#
+
+def print_log (logName: str, count: int):
+
+	linesPrinted = -1
+	
+	if OUTPUT_MODE is OutputMode.TAIL:
+		linesPrinted = print_tail (logName, count, SHOW_HEADERS, SUCCINCT_MODE)
+	
+	elif OUTPUT_MODE is OutputMode.HEAD:
+		linesPrinted = print_head (logName, count, SHOW_HEADERS, SUCCINCT_MODE)
+	else:
+		print ('Error: unknown output mode')
+	
+	return linesPrinted
+		
+
 #
 #	p r i n t _ l o g _ n a m e s
 #
@@ -597,10 +802,10 @@ def print_log_names():
 		print('{:18} {:<40}'.format (log, log_full_path(log)))
 
 #
-#	p r i n t _ l o g s
+#	p r i n t _ l o g _ i n f o
 #
 
-def print_logs():
+def print_log_info():
 	"""Print one line per supported log with path, size, creation & mod timestamps."""
 	print ('LOG NAME                 SIZE  MODIFIED')
 	for log in LOG_CHOICES:
@@ -621,6 +826,9 @@ def print_logs():
 		else:
 			print('{:18}             <missing>'.format (log))
 
+#
+#	p r i n t _ l o g _ h e a d e r
+#
 
 def print_log_header (logName:str, succinct: bool) -> int:
 
@@ -644,7 +852,7 @@ def print_log_header (logName:str, succinct: bool) -> int:
 	return lineCount
 
 
-def show_file_head_faster (filePath: str, lines: int) -> bool:
+def print_file_head_faster (filePath: str, lines: int) -> bool:
 
 	"""Print up to the given number of lines of text from the start of the file at the provided path.
 	If MAX_READ_LEN is reached, stop output and append a '+++'.
@@ -703,7 +911,7 @@ def print_file_head (logName:str, lines:int) -> bool:
 def print_head (logName: str, count: int, header: bool, succinct: bool) -> bool:
     
 	lineList = []
-	lineCount = LINES_PER_LOG
+	lineCounter = count
 	logPath =  get_log_path (logName)
 
 	# First, find first line containing some kind of message date
@@ -711,22 +919,22 @@ def print_head (logName: str, count: int, header: bool, succinct: bool) -> bool:
 	
 	if header:
 		headerCount = print_log_header(logName, succinct)
-		lineCount -= headerCount
+		lineCounter -= headerCount
 	else:
 		headerCount = 0
 	
 	if TIMESTAMP_START != None:
 		lineNum = find_first_timestamp (logPath, TIMESTAMP_START)
 	else:
-		lineNum = 1
+		if LOG_SPECS[logName]['lghd']:
+			lineNum = 2		# skip the column header row
+		else:
+			lineNum = 1
 	
-	tabStops =  LOG_SPECS [logName]['tbst']
+	tabStops = LOG_SPECS [logName]['tbst']
 
 	if lineNum > 0:
-		maxLine = lineNum + count
-		result = True
-		
-		print (lineNum, count, maxLine)
+		#print (lineNum, count, maxLine)
 		
 		while True:
 			line = linecache.getline (logPath, lineNum)
@@ -735,8 +943,8 @@ def print_head (logName: str, count: int, header: bool, succinct: bool) -> bool:
 				lineList.append (lineNum)
 			else:
 				lineList.append (lineNum)
-			lineNum += 1
-			if lineNum > maxLine: break
+			lineCounter -= 1
+			if lineCounter < 1: break
 	
 	for lineNum in lineList:
 		print (expand_tabs_for_line (linecache.getline (logPath, lineNum), tabStops),end='')
@@ -831,22 +1039,6 @@ def print_version():
 
 # https://gist.github.com/pylixm/e6bd4f5456740c12e462eecbc66692fb # tail/follow a file
 
-#
-#	c o m p i l e _ f i l t e r
-#
-
-def compile_filter(regex: str) -> bool:
-	
-	global FILTER_REGEX
-	isValid = False
-	
-	try:
-		FILTER_REGEX = re.compile(regex)
-		isValid = True
-	except re.error as e:       # aliased to PatternError as of 3.13
-		print(f"Regex Error: {e}\n")
-	
-	return isValid
 
 #
 #	m a i n
@@ -869,7 +1061,7 @@ def main():
 			print_log_names()
 			ignorePositionals = True
 		if args.list:
-			print_logs()
+			print_log_info()
 			ignorePositionals = True
 		if args.set:
 			# Do first in case enabling a log
@@ -896,60 +1088,35 @@ def main():
 		
 		if args.succinct:
 			SUCCINCT_MODE = True
-				
-		logLinesCountVal = args.number[0]
-		linesPerLog = 0
+		
+		# Assume we are printing at least one log.
+		
+		linesPrinted = 0;
+		#print ('logLinesCountVal', logLinesCountVal)
 
 		numLogsToPrint = 0
 		if args.log1: numLogsToPrint += 1
 		if args.log2: numLogsToPrint += 1
 
-		if logLinesCountVal.count ('s'):
-			screensNumStr = logLinesCountVal.replace('s','')
-			if len (screensNumStr) == 0:
-				screensNum = 1		# just an 's' by itself counts as 1'
-			try:
-				screensNum = int (screensNumStr)
-			except ValueError:
-				print ("Error: invalid number")
-				break
-			screenLinesCounter = max ([SCREENROWS * screensNum - 1, 6])
-			
-			if numLogsToPrint == 1:
-				linesPerLog = screenLinesCounter // 2
-			else:
-				linesPerLog = screenLinesCounter
-		else:
-			linesPerLog = int (logLinesCountVal)
-				
-		linesPrinted = 0;
+		linesPerLog,screenLinesCounter = calc_row_metrics (numLogsToPrint, args.number[0])
+		if linesPerLog < 1: break
+
+		#print (logLinesCountVal, linesPerLog, screenLinesCounter)
 
 		if args.log1:
-			if OUTPUT_MODE is OutputMode.TAIL:
-				linesPrinted = print_tail (args.log1, linesPerLog, SHOW_HEADERS, SUCCINCT_MODE)
-			
-			elif OUTPUT_MODE is OutputMode.HEAD:
-				linesPrinted = print_head (args.log1, linesPerLog, SHOW_HEADERS, SUCCINCT_MODE)
-			else:
-				print ('Error: unknown output mode')
-				break
+			linesPrinted = print_log (args.log1, linesPerLog)
 		
 		if linesPrinted < 0: break
-		screenLinesCounter -= linesPrinted + 1
+		
+		if screenLinesCounter:
+			screenLinesCounter -= linesPrinted
+			linesPerLog = screenLinesCounter			# Use whatever is left for second log (eg, remainder, or log1 did not consume its maximum)
 		
 		if args.log2:
-			if screenLinesCounter:
-				LINES_PER_LOG = screenLinesCounter
-			
-			if OUTPUT_MODE == OutputMode.TAIL:
-				linesPrinted = print_tail (args.log2, linesPerLog, SHOW_HEADERS, SUCCINCT_MODE)
-			
-			elif OUTPUT_MODE == OutputMode.HEAD:
-				linesPrinted = print_head (args.log2, linesPerLog, SHOW_HEADERS, SUCCINCT_MODE)
+			linesPrinted = print_log (args.log2, linesPerLog)
 
 		screenLinesCounter -= linesPrinted
 		break
-		
 		#curses.endwin()
 
 if __name__=="__main__":
