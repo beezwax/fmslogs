@@ -11,6 +11,7 @@ Purpose: Display FileMaker Server logs and change logging options.
 import argparse, curses, datetime, linecache, os, pathlib, platform, re, sys, textwrap, time
 from collections import OrderedDict
 from enum import Enum
+from contextlib import ExitStack
 
 """
 non-standard install location?
@@ -20,6 +21,7 @@ summarize results where possible (eg, count, min, max, sum)?
 convert table IDs
 paged output
 list crash reports
+for succinct mode, change 'Information' to 'Info' and 'Warning' to 'Warn' (Error will then be longest)
 
 Reset repo:  git fetch origin main; git reset --hard origin/main
 
@@ -663,18 +665,21 @@ class TailPrint (object):
 	# based on https://github.com/kasun/python-tail
 	
 	''' Represents a tail command. '''
-	def __init__(self, logName):
+	def __init__(self, logNames: list):
 		'''Initiate a Tail instance.
 			Check for file validity, assigns callback function to standard out.
-			
 			Arguments:
-				tailed_file - File to be followed. '''
+				tailedFiles - List of file to be followed. '''
+				
+		self.filePaths = []
+		self.logNames = []
 		
-		tailed_file = log_full_path (logName)
-		self.check_file_validity(tailed_file)
-		self.tailed_file = tailed_file
-		self.logName = logName
-		self.callback = sys.stdout.write
+		for log in logNames:
+			tailedFile = log_full_path (log)
+			self.check_file_validity(tailedFile)
+			self.filePaths.append (tailedFile)
+			self.logNames.append (log)
+			self.callback = sys.stdout.write
 	
 	def follow(self, s=1):
 		''' Do a tail follow. If a callback function is registered it is called with every new line. 
@@ -685,7 +690,10 @@ class TailPrint (object):
 		
 		outputActive = False
 		
-		with open(self.tailed_file) as file_:
+		with ExitStack() as stack:
+			self.fileList = [stack.enter_context(open(fpath)) for fpath in self.filePaths]
+
+			#with open(self.tailed_file) as file_:
 			# Go to the end of file
 			while True:
 				curr_position = file_.tell()
@@ -721,18 +729,23 @@ class TailError(Exception):
 
 def tail_print_multifile (logName: str, line: str):
 	"""
-	Print output sent by one or more TailPrint objects. If output transitions to different file
+	Print output sent by one or more TailPrint objects. If output transitions to different file,
 	indicate change by printing blank line followed by file path.
 	"""
 	
-	if logName != LAST_LOG_PRINTED:
-		if LAST_LOG_PRINTED != None:
-		print ('===', file.name)
-		LAST_LOG_PRINTED = logName
-		print ('===', file.name)
+	global LAST_LOG_PRINTED
 	
-	print (line)
-
+	# Check that we actually want to print this line.
+	if FILTER_REGEX == None or FILTER_REGEX.search (line):
+		
+		if logName != LAST_LOG_PRINTED:
+			if LAST_LOG_PRINTED != None:
+				# only print if we have transitioned output from one file to another
+				print ('\n===', logName)
+			LAST_LOG_PRINTED = logName
+			
+		tabStops = LOG_SPECS [logName]['tbst']
+		print (expand_tabs_for_line (line, tabStops))
 
 # =================
 
@@ -1089,6 +1102,12 @@ def main():
 		if args.succinct:
 			SUCCINCT_MODE = True
 		
+		if args.tail and args.log1:
+			tailer = TailPrint (args.log1)
+			if args.log2:
+				tailer = TailPrint (args.log2)
+			
+			
 		# Assume we are printing at least one log.
 		
 		linesPrinted = 0;
