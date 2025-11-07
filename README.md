@@ -16,6 +16,7 @@ Currently Not Working:
 - `-b` or `--begin`: start at first message on or after time or time interval
 - `-m` or `--merge`: combine output of two or more logs based on timestamp
 - `-s` or `--set`: set log options
+- `-t` or `--tail`: follow log
 - `--truncate`: truncate longer lines instead of wrapping them
  
 ---

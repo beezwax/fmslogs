@@ -403,7 +403,7 @@ def setup_parser() -> argparse.ArgumentParser:
 	parser.add_argument('-n', '--number', nargs=1, default=['1s'], help='range or number of lines to print')
 	parser.add_argument('-S', '--set', nargs=1, type=int, help='change log configuration option')
 	parser.add_argument('-s', '--succinct', action='store_true', help='strip less useful details from log output')
-	parser.add_argument('-t', '--tail', action='store_true', help='wait for any new messages after printing current end of log')
+	parser.add_argument('-t', '--tail', action='store_true', help='follow log, waiting for any new messages')
 	parser.add_argument('--truncate', action='store_true', help='cut off any output if beyond width of screen')
 	parser.add_argument('-v', '--version', action='store_true', help='version info')
 	# Hack to avoid error if there is only an option specified but no positional argument
@@ -671,45 +671,40 @@ class TailPrint (object):
 			Arguments:
 				tailedFiles - List of file to be followed. '''
 				
-		self.filePaths = []
 		self.logNames = []
+		self.logPaths = []
 		
 		for log in logNames:
-			tailedFile = log_full_path (log)
-			self.check_file_validity(tailedFile)
-			self.filePaths.append (tailedFile)
+			path = log_full_path (log)
+			self.check_file_validity(path)
 			self.logNames.append (log)
-			self.callback = sys.stdout.write
+			self.logPaths.append (path)
 	
 	def follow(self, s=1):
 		''' Do a tail follow. If a callback function is registered it is called with every new line. 
 		Else printed to standard out.
 
 		Arguments:
-			s - Number of seconds to wait between each iteration; Defaults to 1. '''
+			s - Number of seconds to wait between checking each file'''
 		
-		outputActive = False
+		secs = s / len (self.logSpecs)
 		
 		with ExitStack() as stack:
-			self.fileList = [stack.enter_context(open(fpath)) for fpath in self.filePaths]
-
 			#with open(self.tailed_file) as file_:
+			fileList = [stack.enter_context(open(fpath)) for fpath in self.logSpecs[1]]
+
 			# Go to the end of file
 			while True:
-				curr_position = file_.tell()
-				line = file_.readline()
-				if not line:
-					file_.seek(curr_position)
-					if outputActive:
-						print ()
-						outputActive = False
-					time.sleep(s)
-				else:
-					self.callback(self.logName, line)
-	
-	def register_callback(self, func):
-		''' Overrides default callback function to provided function. '''
-		self.callback = func
+				for (file,log) in zip (fileList, logNames):
+					while True:	# repeat while we have output for this file
+						currPosition = file.tell()
+						line = file.readline()
+						if not line:
+							file.seek(currPosition)
+							time.sleep (secs)
+							break	# try another file
+						else:
+							self.print_line (log, line)
 	
 	def check_file_validity(self, file_):
 		''' Check whether the a given file exists, readable and is a file '''
@@ -720,32 +715,33 @@ class TailPrint (object):
 		if os.path.isdir(file_):
 			raise TailError("File '%s' is a directory" % (file_))
 
+	def print_line(self, logName: str, line: str):
+		"""
+		Print output sent by one or more TailPrint objects. If output transitions to different file,
+		indicate change by printing blank line followed by file path.
+		"""
+		
+		global LAST_LOG_PRINTED
+		
+		# Check that we actually want to print this line.
+		if FILTER_REGEX == None or FILTER_REGEX.search (line):
+			
+			if logName != LAST_LOG_PRINTED:
+				if LAST_LOG_PRINTED != None:
+					# only print if we have transitioned output from one file to another
+					print ('\n===', logName)
+				LAST_LOG_PRINTED = logName
+				
+			tabStops = LOG_SPECS [logName]['tbst']
+			print (expand_tabs_for_line (line, tabStops))
+
+
 class TailError(Exception):
 	def __init__(self, msg):
 		self.message = msg
 	def __str__(self):
 		return self.message
 
-
-def tail_print_multifile (logName: str, line: str):
-	"""
-	Print output sent by one or more TailPrint objects. If output transitions to different file,
-	indicate change by printing blank line followed by file path.
-	"""
-	
-	global LAST_LOG_PRINTED
-	
-	# Check that we actually want to print this line.
-	if FILTER_REGEX == None or FILTER_REGEX.search (line):
-		
-		if logName != LAST_LOG_PRINTED:
-			if LAST_LOG_PRINTED != None:
-				# only print if we have transitioned output from one file to another
-				print ('\n===', logName)
-			LAST_LOG_PRINTED = logName
-			
-		tabStops = LOG_SPECS [logName]['tbst']
-		print (expand_tabs_for_line (line, tabStops))
 
 # =================
 
