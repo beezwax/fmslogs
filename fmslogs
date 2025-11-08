@@ -27,13 +27,13 @@ Reset repo:  git fetch origin main; git reset --hard origin/main
 
 fmslogs [show|tail] all|access|dapi|events|fmsdebug|odata|topcall|wpe [-l|--last] [-h|head] [-t|tail]
 
-fmslogs dapi # tail of log (but not following), printing as many lines as rows on screen
 fmslogs -h access events
 fmslogs -h -n 100 access events
 fmslogs -s topcall 1 # enable TopCall.log
 paging output
 open either directory or log file in text editor, eg $EDITOR
 
+reset repo: git fetch origin main; git reset --hard origin/main
 """
 
 VERSION = "0.10 - 2025-11-01"
@@ -46,7 +46,7 @@ class OutputMode (Enum):
 	TAIL = 2
 	OTHER = 3
 
-LAST_FILE_PRINTED = None
+LAST_LOG_PRINTED = None
 OUTPUT_MODE = OutputMode.TAIL
 SHOW_HEADERS = True
 SUCCINCT_MODE = False
@@ -97,11 +97,11 @@ LOG_SPECS = {
 		'path': 'Admin/FAC/logs/fac.log',
 		'lghd': False,
 		#        ----------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
-		#			2022-05-17 14:29:56 -0700	 Execute /opt/FileMaker/FileMaker Server/Admin/FAC/facstart.sh
-		#			2022-05-17 14:30:00 -0700 - warn:   fmi   127.0.0.1   notifications   general   n/a   "New system notification generated, type: CPU_USAGE_EXCEED_HARD_LIMIT"
+		#			2022-05-17 14:29:56 -0700  Execute /opt/FileMaker/FileMaker Server/Admin/FAC/facstart.sh
+		#			2022-05-17 14:30:00 -0700 - error:   fmi   127.0.0.1   notifications   general   n/a   "New system notification generated, type: CPU_USAGE_EXCEED_HARD_LIMIT"
 		# Only uses tabs with regular messages (eg, not error or warn) after timestamp.
-		'head': 'TIMESTAMP                 {LEVEL}   {END} {ADDRESS}   {COMPONENT}    {TYPE}    {CODE}  MESSAGE',
-		'tbst': [29],
+		'head': 'TIMESTAMP                   LEVEL   ENDP  ADDRESS     COMPONENT       TYPE      CODE  MESSAGE',
+		'tbst': [26,35,40,52,62,69,79,85],
 		'shed': 'TIMESTAMP           {LEVEL}   {END} {ADDRESS}   {COMPONENT}    {TYPE}    {CODE}  MESSAGE',
 		'shtb': [23]
 	},
@@ -138,7 +138,7 @@ LOG_SPECS = {
 		#        ---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
 		#			2025-08-18 23:15:30.125 -0700  Information  228   some-dev.filemaker.beezwax.net  The previous log file reached maximum size, and was renamed to "Event-old.log".
 		'head': 'TIMESTAMP                ZONE  LEVEL        CODE  HOST                            MESSAGE',
-		'tbst': [32,45,51,83],
+		'tbst': [31,44,50,82],
 		#			2025-08-18 23:15:30.125  Information  228   some-dev.filemaker.beezwax.net  The previous log file reached maximum size, and was renamed to "Event-old.log".
 		'shed': 'TIMESTAMP                LEVEL        CODE  HOST                            MESSAGE',
 		'shtb': [26,39,45,77]
@@ -403,12 +403,13 @@ def setup_parser() -> argparse.ArgumentParser:
 	parser.add_argument('-n', '--number', nargs=1, default=['1s'], help='range or number of lines to print')
 	parser.add_argument('-S', '--set', nargs=1, type=int, help='change log configuration option')
 	parser.add_argument('-s', '--succinct', action='store_true', help='strip less useful details from log output')
-	parser.add_argument('-t', '--tail', action='store_true', help='follow log, waiting for any new messages')
+	parser.add_argument('-t', dest='tail', action='store_true', help='wait for any new messages')
+	parser.add_argument('--tail', dest='tail', type=float, nargs=1, default=[-1.0], help='wait for any new messages, specifying number of seconds to wait for each file')
 	parser.add_argument('--truncate', action='store_true', help='cut off any output if beyond width of screen')
 	parser.add_argument('-v', '--version', action='store_true', help='version info')
 	# Hack to avoid error if there is only an option specified but no positional argument
-	parser.add_argument('log1', nargs='?', choices=ALL_CHOICES, help='log name to display')
-	parser.add_argument('log2', nargs='?', help='additional log to display')
+	parser.add_argument('logs', nargs='*', help='log name to display')
+	#parser.add_argument('log2', nargs='?', help='additional log to display')
 
 	return parser
 
@@ -492,11 +493,11 @@ def expand_tabs_for_line(line: str, tabstops) -> str:
 		if i < len(parts) - 1:
 			if next_tab is not None and col < next_tab:
 				spaces = next_tab - col
-				result.append(' ' * spaces)
+				result.append('+' * spaces)
 				col = next_tab
 				next_tab = next(tab_iter, None)
 			else:
-				result.append('  ')	# pad two spaces if no stop specified
+				result.append('++')	# pad two spaces if no stop specified
 				col += 1
 	return ''.join(result)
 
@@ -680,32 +681,39 @@ class TailPrint (object):
 			self.logNames.append (log)
 			self.logPaths.append (path)
 	
-	def follow(self, s=1):
+	def follow(self, s=1.0):
 		''' Do a tail follow. If a callback function is registered it is called with every new line. 
 		Else printed to standard out.
 
 		Arguments:
 			s - Number of seconds to wait between checking each file'''
 		
-		secs = s / len (self.logSpecs)
+		MINDELAY = 0.01 # wait at least 1/100 second before checking next log
+		secs = max (s, MINDELAY)
 		
-		with ExitStack() as stack:
-			#with open(self.tailed_file) as file_:
-			fileList = [stack.enter_context(open(fpath)) for fpath in self.logSpecs[1]]
+		try:
+			with ExitStack() as stack:
+				#with open(self.tailed_file) as file_:
+				fileList = [stack.enter_context(open(fpath)) for fpath in self.logPaths]
+				for file in fileList:
+					file.seek(0,2)
+				
+				# Go to the end of file
+				while True:
+					time.sleep (secs)
 
-			# Go to the end of file
-			while True:
-				for (file,log) in zip (fileList, logNames):
-					while True:	# repeat while we have output for this file
-						currPosition = file.tell()
-						line = file.readline()
-						if not line:
-							file.seek(currPosition)
-							time.sleep (secs)
-							break	# try another file
-						else:
-							self.print_line (log, line)
-	
+					for (file,log) in zip (fileList, self.logNames):
+						while True:
+							currPosition = file.tell()
+							line = file.readline()
+							if line:
+								self.print_line (log, line)
+							else:
+								break
+		
+		except KeyboardInterrupt:
+			return
+
 	def check_file_validity(self, file_):
 		''' Check whether the a given file exists, readable and is a file '''
 		if not os.access(file_, os.F_OK):
@@ -727,13 +735,13 @@ class TailPrint (object):
 		if FILTER_REGEX == None or FILTER_REGEX.search (line):
 			
 			if logName != LAST_LOG_PRINTED:
-				if LAST_LOG_PRINTED != None:
-					# only print if we have transitioned output from one file to another
-					print ('\n===', logName)
+				if LAST_LOG_PRINTED != None: print ()
+				# only print prefix line if we have transitioned output from one file to another
+				print ('===', logName)
 				LAST_LOG_PRINTED = logName
 				
 			tabStops = LOG_SPECS [logName]['tbst']
-			print (expand_tabs_for_line (line, tabStops))
+			print (expand_tabs_for_line (line, tabStops),end='')
 
 
 class TailError(Exception):
@@ -1086,9 +1094,7 @@ def main():
 			#print (args.begin[0])
 			if compile_filter (args.begin[0]) == False:	# Compile the default or the filter that was just set
 				break													# bad regex
-		
-		#print ('type:', type (args.number), args.number)
-				
+						
 		if args.head:
 			OUTPUT_MODE = OutputMode.HEAD
 		
@@ -1097,42 +1103,52 @@ def main():
 		
 		if args.succinct:
 			SUCCINCT_MODE = True
+
+		#print (args.tail, args.logs,type (args.logs))
 		
-		if args.tail and args.log1:
-			tailer = TailPrint (args.log1)
-			if args.log2:
-				tailer = TailPrint (args.log2)
-			
-			
 		# Assume we are printing at least one log.
+		numLogsToPrint = len (args.logs)
+		if numLogsToPrint == 0:
+			print ('Error: expected at least one log name')
+			break
+
+		# Couldn't use choices=ALL_CHOICES in argparse, so must check names manually.
+		for logName in args.logs:
+				if logName not in ALL_CHOICES:
+					print ('Error:', logname,'not a valid log name')
+					break
+		
+		if (type (args.tail) == bool and args.tail) or (type (args.tail) == list and args.tail[0] > 0):
+			# Instead of printing the current tail or head, wait for new messages
+			tailer = TailPrint (args.logs)
+			if type (args.tail) == list:
+				tailer.follow(args.tail[0])
+			else:
+				tailer.follow(1.0)
+
+			break
+			
 		
 		linesPrinted = 0;
-		#print ('logLinesCountVal', logLinesCountVal)
-
-		numLogsToPrint = 0
-		if args.log1: numLogsToPrint += 1
-		if args.log2: numLogsToPrint += 1
+		lastLog = args.logs[-1]
 
 		linesPerLog,screenLinesCounter = calc_row_metrics (numLogsToPrint, args.number[0])
 		if linesPerLog < 1: break
 
 		#print (logLinesCountVal, linesPerLog, screenLinesCounter)
 
-		if args.log1:
-			linesPrinted = print_log (args.log1, linesPerLog)
-		
-		if linesPrinted < 0: break
-		
-		if screenLinesCounter:
-			screenLinesCounter -= linesPrinted
-			linesPerLog = screenLinesCounter			# Use whatever is left for second log (eg, remainder, or log1 did not consume its maximum)
-		
-		if args.log2:
-			linesPrinted = print_log (args.log2, linesPerLog)
+		for logName in args.logs:
+			if logName == lastLog:
+				linesPerLog = screenLinesCounter			# Use whatever is left for last log (eg, there may be a remainder)
 
-		screenLinesCounter -= linesPrinted
-		break
+			linesPrinted = print_log (logName, linesPerLog)
+
+			if linesPrinted < 0: break # error occured
+			
+			screenLinesCounter -= linesPrinted
+					
 		#curses.endwin()
+		break
 
 if __name__=="__main__":
     main()

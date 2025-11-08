@@ -1,23 +1,31 @@
 # fmslogs
-Display and configure FileMaker Server logs
+## Display and configure FileMaker Server logs
 
-Consolidates access to various logs with no dependencies other than the core Python libraries. Goal is to be cross-platform, supporting all three server environments: macOS, Ubuntu, and Windows
 
 Some things that it does that using just tail, head, or Get-Content don't:
-- displays headers for columns
-- uses tab stops that give consistent column values
-- quicker access since you don't have to type full log path
-- limit messages those only after a given timestamp or duration
+- displays headers for columns, even if not showing first row
+- uses custom tab stops for each log that give consistent column alignments
+- quicker access (don't have to type full log path or cd to correct directory)
+- limit messages to those only after a given timestamp or duration
 - lists size and modification dates for all logs
 
-## WORK IN PROGRESS
+Design Goals:
+- no dependencies other than the core Python libraries, and requiring just one file to be copied onto server
+- to be cross-platform, supporting all three server environments: macOS, Ubuntu, and Windows
+- consolidates access to various logs
 
-Currently Not Working:
-- `-b` or `--begin`: start at first message on or after time or time interval
-- `-m` or `--merge`: combine output of two or more logs based on timestamp
-- `-s` or `--set`: set log options
-- `-t` or `--tail`: follow log
-- `--truncate`: truncate longer lines instead of wrapping them
+---
+
+## CURRENT ISSUES
+
+Current functionality with major issues:
+- `-b` or `--begin`: not working
+- `-m` or `--merge`: not working
+- `-S` or `--set`: not working
+- `-s` or `--succinct`: not working
+- `-t` or `--tail`: does not yet print current log segment before starting to follow
+- `--truncate`: not working
+- not including nginx/apache/IIS logs
  
 ---
 
