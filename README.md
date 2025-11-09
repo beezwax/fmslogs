@@ -4,14 +4,15 @@
 
 Some things that it does that using just tail, head, or Get-Content don't:
 - displays headers for columns, even if not showing first row
-- uses custom tab stops for each log that give consistent column alignments
+- uses custom tab stops for each log for consistent column alignments
 - quicker access (don't have to type full log path or cd to correct directory)
 - limit messages to those only after a given timestamp or duration
 - lists size and modification dates for all logs
+- optionally truncate lines to avoid line wrap
 
 Design Goals:
 - no dependencies other than the core Python libraries, and requiring just one file to be copied onto server
-- to be cross-platform, supporting all three server environments: macOS, Ubuntu, and Windows
+- support all three server environments: macOS, Ubuntu, and Windows
 - consolidates access to various logs
 
 ---
@@ -50,6 +51,7 @@ options:
   -r, --range RANGE     range or number of lines to print
   -S, --set SET         change log configuration option
   -s, --succinct        strip less useful details from log output
+  --ssh SSH             use the connection string to fetch logs from remote server
   -t, --tail            wait for any new messages after printing current end of log
   --truncate            cut off any output if beyond width of screen
   -v, --version         version info

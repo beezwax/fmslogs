@@ -4,7 +4,7 @@
 """
 Filename: fmslogs.py
 Author: Simon Brown on 10/15/2025
-Version: 0.10, 2025-10-27
+Version: 0.11, 2025-11-08
 Purpose: Display FileMaker Server logs and change logging options.
 """
 
@@ -419,6 +419,7 @@ def setup_parser() -> argparse.ArgumentParser:
 	parser.add_argument('-p', '--password', help='FMS console or SSH password')
 	parser.add_argument('-S', '--set', nargs=1, type=int, help='change log configuration option')
 	parser.add_argument('-s', '--succinct', action='store_true', help='strip less useful details from log output')
+	parser.add_argument('--ssh', nargs=1, help='use the connection string to fetch logs from remote server')
 	parser.add_argument('-t', dest='tail', action='store_true', help='wait for any new messages')
 	parser.add_argument('--tail', dest='tail', type=float, nargs=1, default=[-1.0], help='wait for any new messages, specifying number of seconds to wait for each file')
 	parser.add_argument('--truncate', action='store_true', help='cut off any output if beyond width of screen')
