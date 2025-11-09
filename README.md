@@ -23,8 +23,8 @@ Current functionality with major issues:
 - `-m` or `--merge`: not working
 - `-S` or `--set`: not working
 - `-s` or `--succinct`: not working
+- `--ssh`: not working
 - `-t` or `--tail`: does not yet print current log segment before starting to follow
-- `--truncate`: not working
 - not including nginx/apache/IIS logs
  
 ---

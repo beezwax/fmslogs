@@ -16,11 +16,11 @@ from contextlib import ExitStack
 """
 non-standard install location?
 'top' or iostat option
-have merged logs
 summarize results where possible (eg, count, min, max, sum)?
 convert table IDs
 paged output
 list crash reports
+remote/external log source via SSH
 for succinct mode, change 'Information' to 'Info' and 'Warning' to 'Warn' (Error will then be longest)
 
 Reset repo:  git fetch origin main; git reset --hard origin/main
@@ -29,6 +29,7 @@ fmslogs [show|tail] all|access|dapi|events|fmsdebug|odata|topcall|wpe [-l|--last
 
 fmslogs -h access events
 fmslogs -h -n 100 access events
+fmslogs --ssh simon@server.beezwax.net access # using user's default 'SSH key
 fmslogs -s topcall 1 # enable TopCall.log
 paging output
 open either directory or log file in text editor, eg $EDITOR
@@ -50,6 +51,7 @@ LAST_LOG_PRINTED = None
 OUTPUT_MODE = OutputMode.TAIL
 SHOW_HEADERS = True
 SUCCINCT_MODE = False
+TRUNCATE_MODE = False
 
 try:
 	SCREENCOLS, SCREENROWS = os.get_terminal_size()
@@ -61,7 +63,7 @@ RANGE_MODE = None							# use 1 screen full to display all logs
 
 MAXREADLEN = 1048576*10
 
-#LOG_CHOICES = ['access', 'admin', 'clientstats', 'dapi', 'events', 'install', 'odata', 'scriptevent', 'stats', 'stderr', 'stderrserverscripting', 'stdout', 'syslog', 'stats', 'topcall', 'wpe']
+#LOG_CHOICES = ['access', 'admin', 'adminapi', 'clientstats', 'dapi', 'events', 'install', 'odata', 'scriptevent', 'stats', 'stderr', 'stderrserverscripting', 'stdout', 'syslog', 'stats', 'topcall', 'wpe']
 
 # Default deployment paths (Windows paths will have forward slashes converted)
 DEF_BASE_PATHS = {
@@ -88,7 +90,7 @@ LOG_SPECS = {
 		#        ----------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
 		#        2025-09-15 01:12:45.831 -0700  Information  228   some-dev.filemaker.beezwax.net         The previous log file reached maximum size, and was renamed to "Access-old.log".
 		'head': 'TIMESTAMP                       LEVEL        CODE  HOST                                   MESSAGE',
-		'tbst': [32,45,51,90],
+		'tbst': [32,45,51,89],
 		#        2025-09-15 01:12:45.831  Information  228   The previous log file reached maximum size, and was renamed to "Access-old.log".
 		'shed': 'TIMESTAMP                LEVEL        CODE  MESSAGE',
 		'shtb': [26,39,45]
@@ -98,10 +100,22 @@ LOG_SPECS = {
 		'lghd': False,
 		#        ----------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
 		#			2022-05-17 14:29:56 -0700  Execute /opt/FileMaker/FileMaker Server/Admin/FAC/facstart.sh
-		#			2022-05-17 14:30:00 -0700 - error:   fmi   127.0.0.1   notifications   general   n/a   "New system notification generated, type: CPU_USAGE_EXCEED_HARD_LIMIT"
+		#			2022-05-17 14:30:00 -0700 - error:  fmi   127.0.0.1   notifications  general   n/a   "New system notification generated, type: CPU_USAGE_EXCEED_HARD_LIMIT"
 		# Only uses tabs with regular messages (eg, not error or warn) after timestamp.
-		'head': 'TIMESTAMP                   LEVEL   ENDP  ADDRESS     COMPONENT       TYPE      CODE  MESSAGE',
-		'tbst': [26,35,40,52,62,69,79,85],
+		'head': 'TIMESTAMP                   LEVEL  ENDP  ADDRESS     COMPONENT      TYPE      CODE  MESSAGE',
+		'tbst': [35,41,53,68,78,84],
+		'shed': 'TIMESTAMP           {LEVEL}   {END} {ADDRESS}   {COMPONENT}    {TYPE}    {CODE}  MESSAGE',
+		'shtb': [23]
+	},
+	'adminapi': {
+		'path': 'Admin/FAC/logs/fac1.log',
+		'lghd': False,
+		#        ----------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
+		#			2022-05-24 14:04:30 -0700 - error:   fmi   127.0.0.1   fmsadminapi   general   3   "Get worker list failed."
+		#			2022-05-24 19:32:51 -0700       Execute /opt/FileMaker/FileMaker Server/Admin/FAC/facstart.sh
+		# Only uses tab after timestamp with regular messages (eg, not error or warn)
+		'head': 'TIMESTAMP                   LEVEL  ENDP  ADDRESS     COMPONENT      TYPE      CODE  MESSAGE',
+		'tbst': [35,41,53,68,78,84],
 		'shed': 'TIMESTAMP           {LEVEL}   {END} {ADDRESS}   {COMPONENT}    {TYPE}    {CODE}  MESSAGE',
 		'shtb': [23]
 	},
@@ -179,7 +193,7 @@ LOG_SPECS = {
 		#        ---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
 		#		  '2025-10-14T13:01:31.232452-08:00  0     INFO   170.255.255.218  GET   /fmi/odata/v4	 75'
 		'head': 'TIMESTAMP                         CODE  LEVEL  HOST             OP    ENDPOINT  SIZE',
-		'tbst': [35,41,48,65,71],  # 'size' value will be padded on end
+		'tbst': [34,40,47,64,70],  # 'size' value will be padded on end
 		#		  '2025-10-14T13:01:31.232452  0     INFO   GET   /fmi/odata/v4	 75'
 		'shed': 'TIMESTAMP                   CODE  LEVEL  OP    ENDPOINT  SIZE',
 		'shtb': [29,35,48]
@@ -250,6 +264,7 @@ LOG_SPECS = {
 LOG_PATHS_STANDARD = {
 	'access': 'Logs/Access.log',
 	'admin': 'Admin/FAC/logs/fac.log',
+	'adminapi': 'Admin/FAC/logs/fac1.log',
 	'clientstats': 'Logs/ClientStats.log',
 	'dapi': 'Logs/fmdapi.log',
 	'events': 'Logs/Event.log',
@@ -401,11 +416,13 @@ def setup_parser() -> argparse.ArgumentParser:
 	parser.add_argument('-L', '--lognames', action='store_true', help='list log names supported by command')
 	parser.add_argument('-m', '--merge', action='store_true', help='combine output of two or more logs based on the message timestamps')
 	parser.add_argument('-n', '--number', nargs=1, default=['1s'], help='range or number of lines to print')
+	parser.add_argument('-p', '--password', help='FMS console or SSH password')
 	parser.add_argument('-S', '--set', nargs=1, type=int, help='change log configuration option')
 	parser.add_argument('-s', '--succinct', action='store_true', help='strip less useful details from log output')
 	parser.add_argument('-t', dest='tail', action='store_true', help='wait for any new messages')
 	parser.add_argument('--tail', dest='tail', type=float, nargs=1, default=[-1.0], help='wait for any new messages, specifying number of seconds to wait for each file')
 	parser.add_argument('--truncate', action='store_true', help='cut off any output if beyond width of screen')
+	parser.add_argument('-u', '--user', help='FMS console or SSH account name')
 	parser.add_argument('-v', '--version', action='store_true', help='version info')
 	# Hack to avoid error if there is only an option specified but no positional argument
 	parser.add_argument('logs', nargs='*', help='log name to display')
@@ -473,17 +490,32 @@ def find_first_timestamp (filePath: str, timestamp: datetime.datetime) -> int:
 #	e x p a n d _ t a b s _ f o r _ l i n e
 #
 
-def expand_tabs_for_line(line: str, tabstops) -> str:
+def expand_tabs_for_line (logName: str, line: str) -> str:
 	"""
 	Expands tabs in the string `line` using the given tabstops.
 	`tabstops` can be a list of column positions (e.g., [4, 8, 12]) or a single integer for fixed tab width.
 	"""
+	
+	try:
+		if SUCCINCT_MODE:
+			tabstops = LOG_SPECS [logName]['shtb']
+		else:
+			tabstops = LOG_SPECS [logName]['tbst']
+	except KeyError:
+		tabstops = 8
+	
+	if logName in ['admin','adminapi']:
+		# This log doesn't use tabs, but instead uses 2 or 3 spaces to separate columns.
+		respace = re.compile (r"  +")
+		line = respace.sub ('\t', line)
+	
 	if isinstance(tabstops, int):
 		return line.expandtabs(tabstops)
 
 	result = []
 
 	parts = line.split('\t')
+		
 	col = 0
 	tab_iter = iter(tabstops)
 	next_tab = next(tab_iter, None)
@@ -493,13 +525,21 @@ def expand_tabs_for_line(line: str, tabstops) -> str:
 		if i < len(parts) - 1:
 			if next_tab is not None and col < next_tab:
 				spaces = next_tab - col
-				result.append('+' * spaces)
+				result.append(' ' * spaces)
 				col = next_tab
 				next_tab = next(tab_iter, None)
 			else:
 				result.append('++')	# pad two spaces if no stop specified
 				col += 1
-	return ''.join(result)
+	
+	if TRUNCATE_MODE:
+		line = ''.join(result)
+		if len (line) > SCREENCOLS:
+			return line [:SCREENCOLS-1] + "…" + '\n'
+		else:
+			return line
+	else:
+		return ''.join(result)
 
 
 #
@@ -740,8 +780,7 @@ class TailPrint (object):
 				print ('===', logName)
 				LAST_LOG_PRINTED = logName
 				
-			tabStops = LOG_SPECS [logName]['tbst']
-			print (expand_tabs_for_line (line, tabStops),end='')
+			print (expand_tabs_for_line (logName, line),end='')
 
 
 class TailError(Exception):
@@ -948,8 +987,6 @@ def print_head (logName: str, count: int, header: bool, succinct: bool) -> bool:
 		else:
 			lineNum = 1
 	
-	tabStops = LOG_SPECS [logName]['tbst']
-
 	if lineNum > 0:
 		#print (lineNum, count, maxLine)
 		
@@ -964,7 +1001,7 @@ def print_head (logName: str, count: int, header: bool, succinct: bool) -> bool:
 			if lineCounter < 1: break
 	
 	for lineNum in lineList:
-		print (expand_tabs_for_line (linecache.getline (logPath, lineNum), tabStops),end='')
+		print (expand_tabs_for_line (logName, linecache.getline (logPath, lineNum)),end='')
 			
 	return len (lineList) + headerCount
 
@@ -1014,12 +1051,15 @@ def print_tail (logName: str, count: int, header: bool, succinct: bool) -> bool:
 	# the actual lineCount is now this:
 	lineCount = len (lineList)
 	
+	if LOG_SPECS[logName]['lghd'] and lineList[0] == 1:
+		# Remove the header line, we'll be using our own
+		del lineList[0]
+
 	if succinct and 'shtb' in LOG_SPECS['access'].keys():
-		tabStops =  LOG_SPECS [logName]['shtb']
 		for lineNum in lineList:
 			line = strip_line (logName, linecache.getline (logPath, lineNum),end='')
 			try:
-				print (expand_tabs_for_line (line, tabStops))
+				print (expand_tabs_for_line (logName, line))
 			except BrokenPipeError:
 				# Catch errors if output is piped and the other end closes prematurely (eg, using `head`).
 				# Use below to avoid a later error when Python flushes stdout
@@ -1029,11 +1069,11 @@ def print_tail (logName: str, count: int, header: bool, succinct: bool) -> bool:
 				break
 
 	else:
-		tabStops =  LOG_SPECS [logName]['tbst']
+		tabstops =  LOG_SPECS [logName]['tbst']
 		
 		for lineNum in lineList:
 			try:
-				print (expand_tabs_for_line (linecache.getline (logPath, lineNum), tabStops),end='')
+				print (expand_tabs_for_line (logName, linecache.getline (logPath, lineNum)),end='')
 			except BrokenPipeError:
 				devnull = os.open(os.devnull, os.O_WRONLY)
 				os.dup2(devnull, sys.stdout.fileno())
@@ -1062,7 +1102,7 @@ def print_version():
 #
 
 def main():
-	global OUTPUT_MODE, RANGE_MODE, SHOW_HEADERS, SUCCINCT_MODE
+	global OUTPUT_MODE, RANGE_MODE, SHOW_HEADERS, SUCCINCT_MODE, TRUNCATE_MODE
 	
 	parser = setup_parser()
 	args = parser.parse_args()
@@ -1103,6 +1143,9 @@ def main():
 		
 		if args.succinct:
 			SUCCINCT_MODE = True
+			
+		if args.truncate:
+			TRUNCATE_MODE = True
 
 		#print (args.tail, args.logs,type (args.logs))
 		
@@ -1115,8 +1158,10 @@ def main():
 		# Couldn't use choices=ALL_CHOICES in argparse, so must check names manually.
 		for logName in args.logs:
 				if logName not in ALL_CHOICES:
-					print ('Error:', logname,'not a valid log name')
-					break
+					print ('Error:', logName,'not a valid log name')
+					sys.exit (1)
+		
+		# TAILING/FOLLOWING LOGS
 		
 		if (type (args.tail) == bool and args.tail) or (type (args.tail) == list and args.tail[0] > 0):
 			# Instead of printing the current tail or head, wait for new messages
@@ -1128,6 +1173,7 @@ def main():
 
 			break
 			
+		# HEAD OR TAIL
 		
 		linesPrinted = 0;
 		lastLog = args.logs[-1]
