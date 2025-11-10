@@ -351,9 +351,7 @@ LOG_PATHS_STANDARD = {
 	'fmscwpc': 'Database Server/bin/fmscwpc',
 	'fmscwpcli': 'Database Server/bin/fmscwpcli.log',
 	'fmslogdebug': 'Database Server/bin/fmslogDebug.log',
-	'fmsdebug': 'Database Server/bin/fmsDebug',
 	'fmwipd': 'Database Server/bin/fmwipd.log',
-	'fmsgetpasskeyebug': 'Database Server/bin/fmsgetpasskeyDebug.log',
 	'fmshdebug': 'Database Server/bin/fmshDebug.log',
 	'fmshelper': 'Logs/fmshelper.log',
 	'fmslogdebug': 'Database Server/bin/fmslogDebug.log',
@@ -363,9 +361,7 @@ LOG_PATHS_STANDARD = {
 	'odata': 'Logs/fmodata.log',
 	'odatadebug': 'Database Server/bin/fmodataDebug.log',
 	'scriptevent': 'Logs/scriptEvent.log',
-	'stats': 'Logs/Stats.log',
 	'topcall': 'Logs/TopCallStats.log',
-	'trimlog': 'Database Server/bin/trimlog.log',
 	'wpe': 'Logs/wpe0.log',
 	'wpedebug': 'Logs/wpe_debug.log'
 }
@@ -405,7 +401,7 @@ def compile_filter(regex: str) -> bool:
 		FILTER_REGEX = re.compile(regex)
 		isValid = True
 	except re.error as e:       # aliased to PatternError as of 3.13
-		print(f"Regex Error: {e}\n")
+		print(f"Error: bad regex expression: {e}\n")
 	
 	return isValid
 
@@ -632,7 +628,7 @@ def read_tail_filtered (filePath: str, linesFromEnd: int) -> list:
 	line numbers from the end of file that match. Line numbers are base 1
 	for use with linecache.getline.
 	"""
-	
+		
 	matching = []
 	lineNum = 1
 	while True:
@@ -640,8 +636,9 @@ def read_tail_filtered (filePath: str, linesFromEnd: int) -> list:
 		if line == '': break
 		if FILTER_REGEX.search (line):
 			matching.append (lineNum)
+		
 		lineNum += 1
-	
+		
 	return matching [-linesFromEnd:]
 		
 
@@ -1098,7 +1095,6 @@ def print_tail (logName: str, count: int, header: bool, succinct: bool) -> bool:
 			lineList = read_tail_time (logPath, lineCount)
 	else:
 		if FILTER_REGEX != None:
-			print ('filtered')
 			lineList = read_tail_filtered (logPath, lineCount)
 		else:
 			#print ('unfiltered')
@@ -1107,9 +1103,10 @@ def print_tail (logName: str, count: int, header: bool, succinct: bool) -> bool:
 	# the actual lineCount is now this:
 	lineCount = len (lineList)
 	
-	if LOG_SPECS[logName]['lghd'] and lineList[0] == 1:
-		# Remove the header line, we'll be using our own
-		del lineList[0]
+	if lineCount > 0:
+		if LOG_SPECS[logName]['lghd'] and lineList[0] == 1:
+			# Remove the header line, we'll be using our own
+			del lineList[0]
 
 	if succinct and 'shtb' in LOG_SPECS['access'].keys():
 		for lineNum in lineList:
@@ -1188,8 +1185,7 @@ def main():
 		
 		if args.begin:
 			#print (args.begin[0])
-			if compile_filter (args.begin[0]) == False:	# Compile the default or the filter that was just set
-				break													# bad regex
+			break
 						
 		if args.head:
 			OUTPUT_MODE = OutputMode.HEAD
@@ -1202,6 +1198,10 @@ def main():
 			
 		if args.truncate:
 			TRUNCATE_MODE = True
+			
+		if args.filter:
+			if compile_filter (args.filter[0]) == False:	# Compile the default or the filter that was just set
+				break													# bad regex
 
 		#print (args.tail, args.logs,type (args.logs))
 		
