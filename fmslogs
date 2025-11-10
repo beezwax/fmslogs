@@ -14,18 +14,17 @@ from enum import Enum
 from contextlib import ExitStack
 
 """
-non-standard install location?
-'top' or iostat option
-summarize results where possible (eg, count, min, max, sum)?
-convert table IDs
-paged output
-list crash reports
-remote/external log source via SSH
-for succinct mode, change 'Information' to 'Info' and 'Warning' to 'Warn' (Error will then be longest)
+POSSIBLE NEW OPTIONS
+	non-standard install location
+	'top' or iostat option
+	summarize results where possible (eg, count, min, max, sum)?
+	convert table IDs
+	paged output
+	list crash reports
+	remote/external log source via SSH
+	for succinct mode, change 'Information' to 'Info' and 'Warning' to 'Warn' (Error will then be longest)
 
 Reset repo:  git fetch origin main; git reset --hard origin/main
-
-fmslogs [show|tail] all|access|dapi|events|fmsdebug|odata|topcall|wpe [-l|--last] [-h|head] [-t|tail]
 
 fmslogs -h access events
 fmslogs -h -n 100 access events
@@ -37,7 +36,7 @@ open either directory or log file in text editor, eg $EDITOR
 reset repo: git fetch origin main; git reset --hard origin/main
 """
 
-VERSION = "0.10 - 2025-11-01"
+VERSION = "0.11 - 2025-11-09"
 TIMESTAMP_START = None
 FILTER_REGEX = None
 TEXTWRAP = textwrap.TextWrapper(width=120,tabsize=10)
@@ -56,14 +55,11 @@ TRUNCATE_MODE = False
 try:
 	SCREENCOLS, SCREENROWS = os.get_terminal_size()
 except OSError:
-	SCREENCOLS = 255	# Probably being piped so no terminal
+	# Probably being piped so no terminal
+	SCREENCOLS = 255
 	SCREENROWS = 48
 	
-RANGE_MODE = None							# use 1 screen full to display all logs
-
 MAXREADLEN = 1048576*10
-
-#LOG_CHOICES = ['access', 'admin', 'adminapi', 'clientstats', 'dapi', 'events', 'install', 'odata', 'scriptevent', 'stats', 'stderr', 'stderrserverscripting', 'stdout', 'syslog', 'stats', 'topcall', 'wpe']
 
 # Default deployment paths (Windows paths will have forward slashes converted)
 DEF_BASE_PATHS = {
@@ -78,12 +74,11 @@ BASE_PATH = DEF_BASE_PATHS [platform.system()]
 # path: location of the log file, starting at the base path
 # lghd: True if the log file has a header line at start of file
 # head: header to use if not succinct mode
-# tbst: tab stops to use for columns
+# tbst: list of tab stops to use for columns, or just a single number for tab size
 # shed: succinct version of header (may not be present)
-# shtb: succinct version of tab stops
+# shtb: succinct version of tab stops (may not be present)
 
-
-LOG_SPECS = {
+LOG_SPECS_BASE = {
 	'access': {
 		'path': 'Logs/Access.log',
 		'lghd': True,
@@ -158,6 +153,34 @@ LOG_SPECS = {
 		'shtb': [26,39,45,77]
 	},
 	
+	'fmsadmindebug': {
+		'path': 'Database Server/bin/fmsadminDebug.log',
+		'lghd': False,
+		'head': None,
+		'tbst': 8
+	},
+	
+	'fmsasedebug': {
+		'path': 'Database Server/bin/fmsaseDebug.log',
+		'lghd': False,
+		'head': None,
+		'tbst': 8
+	},
+	
+	'fmscwpc': {
+		'path': 'Database Server/bin/fmscwpc.log',
+		'lghd': False,
+		'head': None,
+		'tbst': 8
+	},
+	
+	'fmsgetpasskeydebug': {
+		'path': 'Database Server/bin/fmsgetpasskeyDebug.log',
+		'lghd': False,
+		'head': None,
+		'tbst': 8
+	},
+	
 	'fmshelper': {
 		'path': 'Logs/fmshelper.log',
 		'lghd': True,
@@ -173,18 +196,34 @@ LOG_SPECS = {
 		'tbst': []	# replace any tabs with two spaces
 	},
 
-	'install': {
-		'path': 'Logs/install.log',
+	'fmshdebug': {
+		'path': 'Logs/fmshDebug.log',
+		'lghd': True,
+			#		2024-10-21 09:55:47.101 -0700 [HelperApp] Debug::DumpBitSettings() feature(s) enabled: [ AlwaysPrint | Assert | ForceOutput | Backup | UploadDownload | Server | ServerCommands | ServerComponents | ServerDependencies | FMSECLI | NotificationsStackCrawls | Anchors | BPlusTree | FileBox | LicenseServer | CalcEngine | Add-ons | OData | TransactSupport | AdminAPI | CertVerify | CurrentThread | Consolidator | DownloadService | WIP | EditOtherClientLayout | CLI | ThreadedSorting | DisableServerSideSorting | DisableMemoryKeyCmpIndexing | PurgeTempDB | DisableSharingLockOnServer | PersistentData | DisableServerSideSummary | SupportNestedPSOS ]
+			#		2024-10-21 09:55:47.117 -0700 [HelperApp] AdminMgrConfigFile() installation directory = /opt/FileMaker/FileMaker Server/, config file = Admin/conf/deployment.xml, encrypted = false
+		'head': None,
+		'tbst': 8	# replace any tabs with two spaces
+	},
+	
+	'fmsibdebug': {
+		'path': 'Database Server/bin/fmsibDebug.log',
 		'lghd': False,
 		'head': None,
-		'tbst': []
+		'tbst': 8
 	},
-
+	
+	'fmslogdebug': {
+		'path': 'Database Server/bin/fmslogDebug.log',
+		'lghd': False,
+		'head': None,
+		'tbst': 8
+	},
+	
 	'loadschedules': {
 		'path': 'Logs/LoadSchedules.log',
 		'lghd': True,
 		'head': None,
-		'tbst': []
+		'tbst': 8
 	},
 
 	'odata': {
@@ -221,22 +260,6 @@ LOG_SPECS = {
 				  'TIMESTAMP                KB/s In  KB/s OUT  KB/s READ  KB/s WRITE  HIT %   UNSAVD %  CLIENTS  DBS   XDBC     WEBD     CWP      COMPLETE  ACTIVE  ELAPSED  WAIT     I/O      GO',
 		'shtb': [26,35,45,56,68,76,86,95,101,110,119,128,138,146,155,164,173]
 	},
-	
-	'stderrserverscripting': {
-		'path': 'Logs/StdErrServerScripting.log',
-		'lghd': False,
-		'lghd': False,
-		'head': None,
-		'tbst': []
-	},
-	
-	'stdoutserverscripting': {
-		'path': 'Logs/StdOutServerScripting.log',
-		'lghd': False,
-		'lghd': False,
-		'head': None,
-		'tbst': []
-	},
 
 	'topcall': {
 		'path': 'Logs/TopCallStats.log',
@@ -249,6 +272,13 @@ LOG_SPECS = {
 		'shed': 'TIMESTAMP                 Start T.  End T.  Total Elapsed  Operation         Target  Net Bytes In  Net Bytes Out  Elapsed T.  Wait T.  I/O T.  Client name',
 	},
 	
+	'trimlog': {
+		'path': 'Database Server/bin/trimlog.log',
+		'lghd': True,
+		'head': None,
+		'tbst': 8
+	},
+
 	'wpe': {
 		'path': 'Logs/wpe0.log',
 		'lghd': True,
@@ -261,15 +291,62 @@ LOG_SPECS = {
 	}
 }
 
+LOG_SPECS_DARWIN = {
+	'install': {
+		'path': 'Logs/install.log',
+		'lghd': False,
+		'head': None,
+		'tbst': 8
+	},
+	'stderr': {
+		'path': 'Logs/stderr.log',
+		'lghd': False,
+		'lghd': False,
+		'head': None,
+		'tbst': 8
+	},
+	'stdout': {
+		'path': 'Logs/stdout.log',
+		'lghd': False,
+		'lghd': False,
+		'head': None,
+		'tbst': 8
+	},
+}
+
+LOG_SPECS_LINUX = {
+	'stdoutserverscripting': {
+		'path': 'Logs/StdOutServerScripting.log',
+		'lghd': False,
+		'lghd': False,
+		'head': None,
+		'tbst': 8
+	},
+	'stdoutserverscripting': {
+		'path': 'Logs/StdOutServerScripting.log',
+		'lghd': False,
+		'lghd': False,
+		'head': None,
+		'tbst': 8
+	},
+
+}
+
+LOG_SPECS_DARWIN.update (LOG_SPECS_BASE)
+
+LOG_SPECS_LINUX.update (LOG_SPECS_BASE)
+
+LOG_SPECS_WINDOWS = LOG_SPECS_BASE
+
+LOG_SPECS_ALL = {
+	'Darwin': LOG_SPECS_DARWIN,
+	'Linux': LOG_SPECS_LINUX,
+	'Windows': LOG_SPECS_WINDOWS
+}
+
+LOG_SPECS = LOG_SPECS_ALL [platform.system()]
+
 LOG_PATHS_STANDARD = {
-	'access': 'Logs/Access.log',
-	'admin': 'Admin/FAC/logs/fac.log',
-	'adminapi': 'Admin/FAC/logs/fac1.log',
-	'clientstats': 'Logs/ClientStats.log',
-	'dapi': 'Logs/fmdapi.log',
-	'events': 'Logs/Event.log',
-	'fac': 'Admin/FAC/logs/fac.log',
-	'fmsadmindebug': 'Database Server/bin/fmsadminDebug.log',
 	'fmsasedebug': 'Database Server/bin/fmsaseDebug.log',
 	'fmscwpc': 'Database Server/bin/fmscwpc',
 	'fmscwpcli': 'Database Server/bin/fmscwpcli.log',
@@ -293,30 +370,8 @@ LOG_PATHS_STANDARD = {
 	'wpedebug': 'Logs/wpe_debug.log'
 }
 
-LOG_PATHS_LINUX = {
-	'stderrserverscripting': 'Logs/StdErrServerScripting.log',
-	'stdoutserverscripting': 'Logs/StdOutServerScripting.log',
-#	'syslog': '/var/log/syslog'
-}
-LOG_PATHS_LINUX.update (LOG_PATHS_STANDARD)
 
-LOG_PATHS_DARWIN = {
-	'stderr': 'Logs/stderr',
-	'stdout': 'Logs/stdout',
-	#'syslog': '/var/log/system.log'
-}
-
-LOG_PATHS_DARWIN.update (LOG_PATHS_STANDARD)
-
-LOG_PATHS_WINDOWS = LOG_PATHS_STANDARD
-
-LOG_PATHS_ALL = {
-	'Darwin': LOG_PATHS_DARWIN,
-	'Linux': LOG_PATHS_LINUX,
-	'Windows': LOG_PATHS_WINDOWS
-}
-LOG_PATHS = LOG_PATHS_ALL [platform.system()]
-LOG_CHOICES = list (LOG_PATHS.keys())
+LOG_CHOICES = list (LOG_SPECS.keys())
 LOG_CHOICES.sort()
 
 SET_CHOICES = ['interval', 'clientstats', 'fmsdebug', 'logsize', 'topcall']
@@ -387,7 +442,7 @@ def get_log_path (log: str) -> str:
 	# TODO: convert Windows paths
 	#print ('basePath:', BASE_PATH)
 	#print ('logPath', LOG_PATHS [log])
-	return BASE_PATH + '/' + LOG_PATHS [log]
+	return BASE_PATH + '/' + LOG_SPECS [log]['path']
 
 
 def get_file_timestamps (path: str) -> tuple:
@@ -695,10 +750,10 @@ def follow_file(some_file):
 
 
 def log_full_path(log: str) -> str:
-	if LOG_PATHS[log][0] != '/':
-		return BASE_PATH + '/' + LOG_PATHS[log]
+	if LOG_SPECS[log]['path'][0] != '/':
+		return BASE_PATH + '/' + LOG_SPECS[log]['path']
 	else:
-		return LOG_PATHS[log]
+		return LOG_SPECS[log]['path']
 
 # =================
 
@@ -942,7 +997,7 @@ def print_file_head_faster (filePath: str, lines: int) -> bool:
 
 def print_file_head (logName:str, lines:int) -> bool:
     
-	filePath = LOG_PATHS [logName]
+	filePath = LOG_SPECS [logName]['path']
 	lineCount = 0
 
 	try:
@@ -1103,7 +1158,7 @@ def print_version():
 #
 
 def main():
-	global OUTPUT_MODE, RANGE_MODE, SHOW_HEADERS, SUCCINCT_MODE, TRUNCATE_MODE
+	global OUTPUT_MODE, SHOW_HEADERS, SUCCINCT_MODE, TRUNCATE_MODE
 	
 	parser = setup_parser()
 	args = parser.parse_args()
