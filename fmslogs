@@ -850,7 +850,12 @@ class TailError(Exception):
 #
 
 def calc_row_metrics (numLogs, logLinesCountVal) -> tuple:
-
+	"""
+	Using the user supplied quantity,the current terminal screen size,
+	and the number of logs we have to print, determine the number of rows
+	we should attempt to print.
+	"""
+	
 	screenLinesCount = 0
 
 	if logLinesCountVal.count ('s'):
@@ -916,7 +921,7 @@ def print_log_names():
 
 def print_log_info():
 	"""Print one line per supported log with path, size, creation & mod timestamps."""
-	print ('LOG NAME                 SIZE  MODIFIED')
+	print ('LOG NAME                 SIZE  CREATED                   MODIFIED')
 	for log in LOG_CHOICES:
 		fullPath = log_full_path (log)
 				
@@ -930,8 +935,12 @@ def print_log_info():
 
 		if modTime > 0:
 			modTimestamp = time.ctime(modTime)
+			
+			statInfo = os.stat(fullPath)
+			createTimestamp = time.ctime(statInfo.st_birthtime)
+			
 			size = os.path.getsize(fullPath)
-			print('{:18} {:>10}  {:>24}'.format (log, size, modTimestamp))
+			print('{:18} {:>10}  {:<24}  {:<24}'.format (log, size, createTimestamp, modTimestamp))
 		else:
 			print('{:18}             <missing>'.format (log))
 
