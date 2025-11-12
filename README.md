@@ -5,7 +5,7 @@
 Some things that it does that using just tail, head, or Get-Content don't:
 - displays headers for columns, even if not showing first row
 - uses custom tab stops for each log for consistent column alignments
-- quicker access (don't have to type full log path or cd to correct directory)
+- quick access to print or open in editor (don't have to type full log path or cd to correct directory)
 - limit messages to those only after a given timestamp or duration
 - lists size and modification dates for all logs
 - optionally truncate lines to avoid line wrap
@@ -41,6 +41,7 @@ positional arguments:
 
 options:
   -b, --begin BEGIN     start at first message on or after time or time interval in BEGIN
+  -e, --editor          open the log in a text editor; first try $EDITOR, then GUI editor (macOS), then nano
   -f, --filter FILTER   only return lines matching regex expression FILTER
   -h, --head            display the start of the specified log files instead of its tail
   --help                display command details

@@ -484,18 +484,23 @@ def setup_parser() -> argparse.ArgumentParser:
 
 
 #
-#	e d i t _ l o get_log_path
+#	e d i t _ l o g
 #
 
 def edit_log (logName: str):
 
 	# TODO: needs Windows version
 	# TODO: use vi as second fallback if no nano?
+	# TODO: open in GUI editor if available
 	
 	if 'EDITOR' in os.environ:
 		exitCode = subprocess.call ('$EDITOR "' + get_log_path (logName) + '"', shell=True)
+	elif platform.system() == 'Darwin' and subprocess.call (['/usr/bin/pgrep','loginwindow']) == 0:
+		exitCode = subprocess.call (['/usr/bin/open', '-e', get_log_path (logName)])
+	elif platform.system() == 'Windows':
+		exitCode = subprocess.call (['notepad', get_log_path (logName)])		
 	else:
-		exitCode = subprocess.call ('/usr/bin/nano "' + get_log_path (logName) + '"', shell=True)
+		exitCode = subprocess.call (['/usr/bin/nano', get_log_path (logName)])
 	
 	sys.exit (exitCode)
 
