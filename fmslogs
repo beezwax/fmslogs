@@ -8,7 +8,7 @@ Version: 0.11, 2025-11-08
 Purpose: Display FileMaker Server logs and change logging options.
 """
 
-import argparse, curses, datetime, linecache, os, pathlib, platform, re, sys, textwrap, time
+import argparse, curses, datetime, linecache, os, pathlib, platform, re, subprocess, sys, textwrap, time
 from collections import OrderedDict
 from enum import Enum
 from contextlib import ExitStack
@@ -30,7 +30,6 @@ fmslogs -h access events
 fmslogs -h -n 100 access events
 fmslogs --ssh simon@server.beezwax.net access # using user's default 'SSH key
 fmslogs -s topcall 1 # enable TopCall.log
-paging output
 open either directory or log file in text editor, eg $EDITOR
 
 reset repo: git fetch origin main; git reset --hard origin/main
@@ -459,6 +458,7 @@ def setup_parser() -> argparse.ArgumentParser:
 		description='View FileMaker Server logs and set logging options')
 
 	parser.add_argument('-b', '--begin', nargs=1, help='start at first message on or after time or time interval')
+	parser.add_argument('-e', '--edit', nargs=1, help='open the log file using the command defined by $EDITOR')
 	parser.add_argument('-f', '--filter', nargs=1, help='only return lines matching regex expression')
 	parser.add_argument('-h', '--head', action='store_true', help='display the first lines of log files')
 	parser.add_argument('-H', '--headers-off', dest='headers_off', action='store_true', help='turn off headers for all logs')
@@ -481,6 +481,23 @@ def setup_parser() -> argparse.ArgumentParser:
 	#parser.add_argument('log2', nargs='?', help='additional log to display')
 
 	return parser
+
+
+#
+#	e d i t _ l o get_log_path
+#
+
+def edit_log (logName: str):
+
+	# TODO: needs Windows version
+	# TODO: use vi as second fallback if no nano?
+	
+	if 'EDITOR' in os.environ:
+		exitCode = subprocess.call ('$EDITOR "' + get_log_path (logName) + '"', shell=True)
+	else:
+		exitCode = subprocess.call ('/usr/bin/nano "' + get_log_path (logName) + '"', shell=True)
+	
+	sys.exit (exitCode)
 
 
 #
@@ -713,6 +730,7 @@ def init_curses():
     SCREENROWS, SCREENCOLS = STDSCR.getmaxyx()
     STDSCR.scrollok(1)
 
+# https://gist.github.com/pylixm/e6bd4f5456740c12e462eecbc66692fb # tail/follow a file
 
 def follow_file(some_file):
 	"""
@@ -937,7 +955,10 @@ def print_log_info():
 			modTimestamp = time.ctime(modTime)
 			
 			statInfo = os.stat(fullPath)
-			createTimestamp = time.ctime(statInfo.st_birthtime)
+			# ubuntu: stat -c "%w" Access.log
+			# macos:  stat -f "%B" 
+			#createTimestamp = time.ctime(statInfo.st_birthtime)
+			createTimestamp = datetime.datetime.fromtimestamp (statInfo.st_birthtime)
 			
 			size = os.path.getsize(fullPath)
 			print('{:18} {:>10}  {:<24}  {:<24}'.format (log, size, createTimestamp, modTimestamp))
@@ -1156,9 +1177,6 @@ def print_version():
 	print ()
 
 
-# https://gist.github.com/pylixm/e6bd4f5456740c12e462eecbc66692fb # tail/follow a file
-
-
 #
 #	m a i n
 #
@@ -1195,7 +1213,10 @@ def main():
 		if args.begin:
 			#print (args.begin[0])
 			break
-						
+		
+		if args.edit:
+				edit_log (args.edit[0])
+			
 		if args.head:
 			OUTPUT_MODE = OutputMode.HEAD
 		
