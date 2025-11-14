@@ -20,7 +20,7 @@ Design Goals:
 ## CURRENT ISSUES
 
 Current functionality with major issues:
-- `-b` or `--begin`: not working
+- `-b` or `--begin`: only working with durations (eg, 'd' or '1d' for 1 day)
 - `-m` or `--merge`: not working
 - `-S` or `--set`: not working
 - `-s` or `--succinct`: not working
@@ -60,6 +60,13 @@ options:
 
 ---
 
+### -b, --begin
+Start printing logs on or after the given duration. Durations are an optional number followed by:
+- 's': seconds from now
+- 'm': minutes from now
+- 'h': hours from now
+- 'd': days since midnight today (e.g., '2d' would be from midnight yesterday)
+
 ### -e, --edit
 Opens a log file in an editor. If the standard shell environment variable $EDITOR is set for the user, the file will be opened using that command.
 
@@ -79,3 +86,6 @@ Normally, unless tailing a log or printing a log that does not have any fixed co
 
 ### -s, --succinct
 Shorten the output of log lines where possible. This includes things like redundant time zones and host names, and shortening some values (eg, Warning becomes Warn).
+
+### --truncate
+Remove any output from the end of the line that would cause a line wrap for the current screen width.
