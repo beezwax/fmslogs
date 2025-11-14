@@ -60,23 +60,22 @@ options:
 
 ---
 
-### -e or --edit
-Opens a log file in an editor. The editor used will vary depending on the environment.
-
-If the standard shell environment variable $EDITOR is set for the user, the file will be opened using that command.
+### -e, --edit
+Opens a log file in an editor. If the standard shell environment variable $EDITOR is set for the user, the file will be opened using that command.
 
 Next, attempt to open using a GUI editor. On macOS, first check that there is a user logged in to the desktop, and if so, open the log file using TextEdit. For Windows, it will open the file using Notepad.
 
 Finally, on Ubuntu and macOS, it will attempt to open the log using the Terminal based nano text editor.
 
-### -f or --FILTER
-Only display messages matching the given regular expression.
-
-Filtering will happen before any -r/--range limits are applied or simplification if using --succinct.
+### -f, --filter
+Only display messages matching the given regular expression (regex). Filtering will happen before any -r/--range limits are applied or simplification if using --succinct.
 
 The version of regex expressions used is similar to Perl's regex (often called PCRE), but is specific to Python.
 
-### -H or --headers-off
-Normally column headers will be printed on the first line for logs having consistent columns. Use thins
-option to turn them off.
+### -H, --headers-off
+Disable the printing of any log column headers the command may use, and don't skip any column headers present in the log files.
 
+Normally, unless tailing a log or printing a log that does not have any fixed columns, the command includes its own column header as the first line for each log.
+
+### -s, --succinct
+Shorten the output of log lines where possible. This includes things like redundant time zones and host names, and shortening some values (eg, Warning becomes Warn).
