@@ -4,7 +4,7 @@
 """
 Filename: fmslogs.py
 Author: Simon Brown on 10/15/2025
-Version: 0.11, 2025-11-08
+Version: 0.20, 2025-11-13
 Purpose: Display FileMaker Server logs and change logging options.
 """
 
@@ -173,6 +173,13 @@ LOG_SPECS_BASE = {
 		'tbst': 8
 	},
 	
+	'fmscwpcli': {
+		'path': 'Database Server/bin/fmscwpcli.log',
+		'lghd': False,
+		'head': None,
+		'tbst': 8
+	},
+
 	'fmsgetpasskeydebug': {
 		'path': 'Database Server/bin/fmsgetpasskeyDebug.log',
 		'lghd': False,
@@ -218,6 +225,12 @@ LOG_SPECS_BASE = {
 		'tbst': 8
 	},
 	
+	'fmwipd': {
+		'path': 'Database Server/bin/fmwipd.log',
+		'lghd': False,
+		'tbst': 8
+	},
+
 	'loadschedules': {
 		'path': 'Logs/LoadSchedules.log',
 		'lghd': True,
@@ -236,6 +249,13 @@ LOG_SPECS_BASE = {
 		'shed': 'TIMESTAMP                   CODE  LEVEL  OP    ENDPOINT  SIZE',
 		'shtb': [29,35,48]
 	},
+	
+	'odatadebug': {
+		'path': 'Database Server/bin/fmodataDebug.log',
+		'lghd': False,
+		'tbst': 8
+	},
+	
 	'scriptevent': {
 		'path': 'Logs/scriptEvent.log',
 		'lghd': False,
@@ -287,8 +307,15 @@ LOG_SPECS_BASE = {
 		'head': 'TIMESTAMP                  HOSTNAME         CLIENT           ACCOUNT                     MODULE_TYPE  SEVERITY  ERROR  BYTES     MESSAGE',
 		'tbst': [27,44,61,89,102,112,119,129],
 		'shed': 'TIMESTAMP                 Start T.  End T.  Total Elapsed  Operation         Target  Net Bytes In  Net Bytes Out  Elapsed T.  Wait T.  I/O T.  Client name',
+	},
+	
+	'wpedebug': {
+		'path': 'Logs/wpe_debug.log',
+		'lghd': False,
+		'tbst': 8
 	}
 }
+
 
 LOG_SPECS_DARWIN = {
 	'install': {
@@ -345,33 +372,14 @@ LOG_SPECS_ALL = {
 
 LOG_SPECS = LOG_SPECS_ALL [platform.system()]
 
-LOG_PATHS_STANDARD = {
-	'fmsasedebug': 'Database Server/bin/fmsaseDebug.log',
-	'fmscwpc': 'Database Server/bin/fmscwpc',
-	'fmscwpcli': 'Database Server/bin/fmscwpcli.log',
-	'fmslogdebug': 'Database Server/bin/fmslogDebug.log',
-	'fmwipd': 'Database Server/bin/fmwipd.log',
-	'fmshdebug': 'Database Server/bin/fmshDebug.log',
-	'fmshelper': 'Logs/fmshelper.log',
-	'fmslogdebug': 'Database Server/bin/fmslogDebug.log',
-	'install': 'Logs/install.log',
-	'fmsgetpasskeyebug': 'Database Server/bin/fmsgetpasskeyDebug.log',
-	'loadschedules': 'Logs/LoadSchedules.log',
-	'odata': 'Logs/fmodata.log',
-	'odatadebug': 'Database Server/bin/fmodataDebug.log',
-	'scriptevent': 'Logs/scriptEvent.log',
-	'topcall': 'Logs/TopCallStats.log',
-	'wpe': 'Logs/wpe0.log',
-	'wpedebug': 'Logs/wpe_debug.log'
-}
-
 
 LOG_CHOICES = list (LOG_SPECS.keys())
 LOG_CHOICES.sort()
 
-SET_CHOICES = ['interval', 'clientstats', 'fmsdebug', 'logsize', 'topcall']
+# Even if using RawDescriptionHelpFormatter, argparse tries hard to strip leading or trailing whitespace.
+HELP_EPILOGUE = """Log names supported on this platform are:\n\n  """ + '\n  '.join (LOG_CHOICES) + '\n '
 
-ALL_CHOICES = LOG_CHOICES + SET_CHOICES
+ALL_CHOICES = LOG_CHOICES  # TODO: need to add in choices that aren't log names?
 
 class terminal_colors:
    PURPLE = '\033[95m'
@@ -496,7 +504,8 @@ def setup_parser() -> argparse.ArgumentParser:
 	parser = argparse.ArgumentParser(
 		prog='fmslogs',
 		add_help=False,
-		description='View FileMaker Server logs and set logging options')
+		formatter_class=argparse.RawDescriptionHelpFormatter,
+		description='View FileMaker Server logs and set logging options.')
 
 	parser.add_argument('-b', '--begin', nargs=1, help='start at first message on or after time or time interval')
 	parser.add_argument('-e', '--edit', nargs=1, help='open the log file using the command defined by $EDITOR')
@@ -521,6 +530,8 @@ def setup_parser() -> argparse.ArgumentParser:
 	parser.add_argument('logs', nargs='*', help='log name to display')
 	#parser.add_argument('log2', nargs='?', help='additional log to display')
 
+	parser.epilog = HELP_EPILOGUE
+	
 	return parser
 
 
