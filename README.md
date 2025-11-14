@@ -41,7 +41,7 @@ positional arguments:
 
 options:
   -b, --begin BEGIN     start at first message on or after time or time interval in BEGIN
-  -e, --editor          open the log in a text editor; first try $EDITOR, then GUI editor (macOS), then nano
+  -e, --edit            open the log in a text editor; first try $EDITOR, then GUI editor (macOS), then nano
   -f, --filter FILTER   only return lines matching regex expression FILTER
   -h, --head            display the start of the specified log files instead of its tail
   --help                display command details
@@ -59,4 +59,24 @@ options:
 ```
 
 ---
+
+### -e or --edit
+Opens a log file in an editor. The editor used will vary depending on the environment.
+
+If the standard shell environment variable $EDITOR is set for the user, the file will be opened using that command.
+
+Next, attempt to open using a GUI editor. On macOS, first check that there is a user logged in to the desktop, and if so, open the log file using TextEdit. For Windows, it will open the file using Notepad.
+
+Finally, on Ubuntu and macOS, it will attempt to open the log using the Terminal based nano text editor.
+
+### -f or --FILTER
+Only display messages matching the given regular expression.
+
+Filtering will happen before any -r/--range limits are applied or simplification if using --succinct.
+
+The version of regex expressions used is similar to Perl's regex (often called PCRE), but is specific to Python.
+
+### -H or --headers-off
+Normally column headers will be printed on the first line for logs having consistent columns. Use thins
+option to turn them off.
 

@@ -388,6 +388,47 @@ class terminal_colors:
 
 
 #
+#	calc_row_metrics
+#
+
+def calc_row_metrics (numLogs, logLinesCountVal) -> tuple:
+	"""
+	Using the user supplied quantity,the current terminal screen size,
+	and the number of logs we have to print, determine the number of rows
+	we should attempt to print.
+	"""
+	
+	screenLinesCount = 0
+
+	if logLinesCountVal.count ('s'):
+		screensNumStr = logLinesCountVal.replace('s','')
+					
+		if len (screensNumStr) == 0:
+			screensNum = 1		# just an 's' by itself counts as 1'
+		try:
+			screensNum = int (screensNumStr)
+		except ValueError:
+			print ("Error: invalid number for number parameter")
+			return (-1,-1)
+			
+		screenLinesCount = max ([SCREENROWS * screensNum - 1, 6])
+		
+		if numLogs == 1:
+			linesPerLog = screenLinesCount
+		else:
+			linesPerLog = screenLinesCount // numLogs
+	
+	else:
+		try:
+			linesPerLog = int (logLinesCountVal)
+		except ValueError:
+			print ("Error: invalid number for number parameter")
+			return (-1,-1)
+	
+	return (linesPerLog,screenLinesCount)
+
+
+#
 #	c o m p i l e _ f i l t e r
 #
 
@@ -403,6 +444,17 @@ def compile_filter(regex: str) -> bool:
 		print(f"Error: bad regex expression: {e}\n")
 	
 	return isValid
+
+
+#
+#	g e t _ l o g _ p a t h
+#
+
+def get_log_path (log: str) -> str:
+	# TODO: convert Windows paths
+	#print ('basePath:', BASE_PATH)
+	#print ('logPath', LOG_PATHS [log])
+	return BASE_PATH + '/' + LOG_SPECS [log]['path']
 
 
 #
@@ -427,17 +479,6 @@ def strip_line (logName: str, line: str) -> str:
 			line = line [:23] + line [29:45] + line[62:]			# remove timezone & hostname
 
 	return line
-
-
-#
-#	g e t _ l o g _ p a t h
-#
-
-def get_log_path (log: str) -> str:
-	# TODO: convert Windows paths
-	#print ('basePath:', BASE_PATH)
-	#print ('logPath', LOG_PATHS [log])
-	return BASE_PATH + '/' + LOG_SPECS [log]['path']
 
 
 def get_file_timestamps (path: str) -> tuple:
@@ -489,7 +530,7 @@ def setup_parser() -> argparse.ArgumentParser:
 
 def edit_log (logName: str):
 
-	# TODO: needs Windows version
+	# TODO: needs Windows version for first & third options
 	# TODO: use vi as second fallback if no nano?
 	# TODO: open in GUI editor if available
 	
@@ -869,45 +910,39 @@ class TailError(Exception):
 # =================
 
 #
-#	calc_row_metrics
+#	p a r s e _ b e g i n _ t i m e
 #
 
-def calc_row_metrics (numLogs, logLinesCountVal) -> tuple:
+def parse_begin_time (timeStr: str) -> datetime.datetime:
 	"""
-	Using the user supplied quantity,the current terminal screen size,
-	and the number of logs we have to print, determine the number of rows
-	we should attempt to print.
+	Convert the various possible time values into a timestamp value. Some
+	possible values could be '30s' for 30 seconds from now, or '14:00:10'
+	for 10 secs past 2pm today, or '2025-11-04 14:00' for 2pm on Nov 4.
 	"""
 	
-	screenLinesCount = 0
-
-	if logLinesCountVal.count ('s'):
-		screensNumStr = logLinesCountVal.replace('s','')
-					
-		if len (screensNumStr) == 0:
-			screensNum = 1		# just an 's' by itself counts as 1'
-		try:
-			screensNum = int (screensNumStr)
-		except ValueError:
-			print ("Error: invalid number for number parameter")
-			return (-1,-1)
-			
-		screenLinesCount = max ([SCREENROWS * screensNum - 1, 6])
-		
-		if numLogs == 1:
-			linesPerLog = screenLinesCount
-		else:
-			linesPerLog = screenLinesCount // numLogs
+	newTime = None
 	
-	else:
-		try:
-			linesPerLog = int (logLinesCountVal)
-		except ValueError:
-			print ("Error: invalid number for number parameter")
-			return (-1,-1)
+	# Duration value or a timestamp?
+	m = re.search('[0-9]{0,6}[smhd]', timeStr)
+	if m.group(0) != None:
+		if len (timeStr) == len (m.group(0)):
+			unit = m.group(0)[:-1]
+			unitCount = 1
+			if len (m.group(0)):
+				unitCount = int (m.group(0)[:-1])
+			newTime = datetime.now()
+			if unit == 's':
+				newTime -= timedelta(seconds=unitCount)
+			elif unit == 'm':
+				newTime -= timedelta(minutes=unitCount)
+			elif unit == 'h':
+				newTime -= timedelta(hours=unitCount)
+			elif unit == 'd':
+				newTime -= timedelta(dayss=unitCount)
+			else:
+				sys.exit(9)
 	
-	return (linesPerLog,screenLinesCount)
-
+	return newTime
 
 #
 #	p r i n t _ l o g
@@ -1187,7 +1222,7 @@ def print_version():
 #
 
 def main():
-	global OUTPUT_MODE, SHOW_HEADERS, SUCCINCT_MODE, TRUNCATE_MODE
+	global OUTPUT_MODE, SHOW_HEADERS, SUCCINCT_MODE, TIMESTAMP_START, TRUNCATE_MODE
 	
 	parser = setup_parser()
 	args = parser.parse_args()
@@ -1217,7 +1252,7 @@ def main():
 		
 		if args.begin:
 			#print (args.begin[0])
-			break
+			TIMESTAMP_START = parse_begin_time (args.begin)
 		
 		if args.edit:
 				edit_log (args.edit[0])
