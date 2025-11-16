@@ -31,8 +31,6 @@ fmslogs -h -n 100 access events
 fmslogs --ssh simon@server.beezwax.net access # using user's default 'SSH key
 fmslogs -s topcall 1 # enable TopCall.log
 open either directory or log file in text editor, eg $EDITOR
-
-reset repo: git fetch origin main; git reset --hard origin/main
 """
 
 VERSION = "0.11 - 2025-11-09"
@@ -83,7 +81,7 @@ LOG_SPECS_BASE = {
 		'lghd': True,
 		#        ----------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
 		#        2025-09-15 01:12:45.831 -0700  Information  228   some-dev.filemaker.beezwax.net         The previous log file reached maximum size, and was renamed to "Access-old.log".
-		'head': 'TIMESTAMP                       LEVEL        CODE  HOST                                   MESSAGE',
+		'head': 'TIMESTAMP                       LEVEL        CODE  HOST                                  MESSAGE',
 		'tbst': [32,45,51,89],
 		#        2025-09-15 01:12:45.831  Information  228   The previous log file reached maximum size, and was renamed to "Access-old.log".
 		'shed': 'TIMESTAMP                LEVEL        CODE  MESSAGE',
@@ -91,7 +89,7 @@ LOG_SPECS_BASE = {
 	},
 	'admin': {
 		'path': 'Admin/FAC/logs/fac.log',
-		'lghd': False,
+		'lghd': True,
 		#        ----------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
 		#			2022-05-17 14:29:56 -0700  Execute /opt/FileMaker/FileMaker Server/Admin/FAC/facstart.sh
 		#			2022-05-17 14:30:00 -0700 - error:  fmi   127.0.0.1   notifications  general   n/a   "New system notification generated, type: CPU_USAGE_EXCEED_HARD_LIMIT"
@@ -407,9 +405,11 @@ def calc_row_metrics (numLogs, logLinesCountVal) -> tuple:
 	"""
 	
 	screenLinesCount = 0
+	numMode = None
 
 	if logLinesCountVal.count ('s'):
 		screensNumStr = logLinesCountVal.replace('s','')
+		numMode = 's'
 					
 		if len (screensNumStr) == 0:
 			screensNum = 1		# just an 's' by itself counts as 1'
@@ -432,8 +432,8 @@ def calc_row_metrics (numLogs, logLinesCountVal) -> tuple:
 		except ValueError:
 			print ("Error: invalid number for number parameter")
 			return (-1,-1)
-	
-	return (linesPerLog,screenLinesCount)
+		
+	return (numMode,linesPerLog,screenLinesCount)
 
 
 #
@@ -493,10 +493,36 @@ def get_file_timestamps (path: str) -> tuple:
 	"""Return a file's creation and modification timestamps"""
 	return (os.path.getmtime(path), pathlib.Path(path).stat().st_mtime)
 
+#
+#	c h e c k _ f i l e _ v a l i d i t y
+#
+
+def check_file_validity (path: str):
+	'''
+	Check whether the a given file exists, readable and is a file.
+	Return None if no issue found, otherwise return an error message.
+	'''
+	if not os.access(path, os.F_OK):
+		raise FileCheckError ("'%s' does not exist" % (path))
+	if not os.access(path, os.R_OK):
+		raise FileCheckError ("'%s' is not readable" % (path))
+	if os.path.isdir(path):
+		raise FileCheckError ("'%s' is a directory" % (path))
+	
+class FileCheckError(Exception):
+	def __init__(self, msg):
+		self.message = msg
+	def __str__(self):
+		return self.message
+
 
 def count_fixed_log_references (args: argparse.ArgumentParser) -> int:
 	"""Return the number of logs referenced for output, except if following."""
 	return 0
+
+#
+#	s e t u p _ p a r s e r
+#
 
 def setup_parser() -> argparse.ArgumentParser:
 	"""Setup parameters used for command interface. Does not attempt to parse."""
@@ -534,7 +560,6 @@ def setup_parser() -> argparse.ArgumentParser:
 	
 	return parser
 
-
 #
 #	e d i t _ l o g
 #
@@ -555,7 +580,6 @@ def edit_log (logName: str):
 		exitCode = subprocess.call (['/usr/bin/nano', get_log_path (logName)])
 	
 	sys.exit (exitCode)
-
 
 #
 #	f i n d _ f i r s t _ t i m e s t a m p
@@ -605,7 +629,7 @@ def find_first_timestamp (filePath: str, timestamp: datetime.datetime) -> int:
 		#	continue
 
 		# If we reached the timestamp, go into next while loop to match by text value.
-		if lineTS != None and timestamp <= lineTS:
+		if lineTS != None and lineTS >= timestamp:
 			lineResult = lineNum
 			break
 	
@@ -678,10 +702,10 @@ def read_tail (filePath: str, linesFromEnd: int) -> list:
 	Line numbers are base 1 for use with linecache.getline.
 	"""
 	
-	#print ('filePath:', filePath)
-	
-	matching = []
+	check_file_validity (filePath)
 	lineNum = 1
+	matching = []
+	
 	while True:
 		line = linecache.getline (filePath, lineNum)
 		if line == '': break
@@ -702,7 +726,9 @@ def read_tail_filtered (filePath: str, linesFromEnd: int) -> list:
 	line numbers from the end of file that match. Line numbers are base 1
 	for use with linecache.getline.
 	"""
-		
+	
+	check_file_validity (filePath)
+	
 	matching = []
 	lineNum = 1
 	while True:
@@ -727,6 +753,7 @@ def read_tail_filtered_and_time (filePath: str, linesFromEnd: int) -> list:
 	Line numbers are base 1 for use with linecache.getline.
 	"""
 	
+	check_file_validity (filePath)
 	matching = []
 	lastTimeLine = -1
 	
@@ -761,6 +788,7 @@ def read_tail_time (filePath: str, linesFromEnd: int) -> list:
 	Line numbers are base 1 for use with linecache.getline.
 	"""
 
+	check_file_validity (filePath)
 	matching = []
 	
 	# First, find the first line containing some kind of message date
@@ -885,11 +913,11 @@ class TailPrint (object):
 	def check_file_validity(self, file_):
 		''' Check whether the a given file exists, readable and is a file '''
 		if not os.access(file_, os.F_OK):
-			raise TailError("File '%s' does not exist" % (file_))
+			raise FileCheckError("File '%s' does not exist" % (file_))
 		if not os.access(file_, os.R_OK):
-			raise TailError("File '%s' not readable" % (file_))
+			raise FileCheckError("File '%s' not readable" % (file_))
 		if os.path.isdir(file_):
-			raise TailError("File '%s' is a directory" % (file_))
+			raise FileCheckError("File '%s' is a directory" % (file_))
 
 	def print_line(self, logName: str, line: str):
 		"""
@@ -909,14 +937,6 @@ class TailPrint (object):
 				LAST_LOG_PRINTED = logName
 				
 			print (expand_tabs_for_line (logName, line),end='')
-
-
-class TailError(Exception):
-	def __init__(self, msg):
-		self.message = msg
-	def __str__(self):
-		return self.message
-
 
 # =================
 
@@ -940,8 +960,9 @@ def parse_begin_time (timeStr: str) -> datetime.datetime:
 			newTime = datetime.datetime.now()
 			unit = m.group(0)[-1]
 			unitCount = 1
+			
 			if len (m.group(0)) > 1:
-				unitCount = min (int (m.group(0)[:-1]), 1)
+				unitCount = max (int (m.group(0)[:-1]), 1)
 			if unit == 's':
 				newTime -= datetime.timedelta(seconds=unitCount)
 			elif unit == 'm':
@@ -957,6 +978,7 @@ def parse_begin_time (timeStr: str) -> datetime.datetime:
 				print ('Error: invalid duration')
 				sys.exit(9)
 	
+	print (newTime, unitCount)
 	return newTime
 
 #
@@ -984,9 +1006,9 @@ def print_log (logName: str, count: int):
 
 def print_log_names():
 	"""Print out log names as used by command with their expected paths."""
-	print ('LOG NAME            PATH')
+	print ('LOG NAME                PATH')
 	for log in LOG_CHOICES:
-		print('{:18}  {:<40}'.format (log, log_full_path(log)))
+		print('{:22}  {:<40}'.format (log, log_full_path(log)))
 
 #
 #	p r i n t _ l o g _ i n f o
@@ -1108,6 +1130,12 @@ def print_head (logName: str, count: int, header: bool, succinct: bool) -> bool:
 	lineCounter = count
 	logPath =  get_log_path (logName)
 
+	try:
+		check_file_validity (logPath)
+	except FileCheckError as e:
+		print ('Error:', e)
+		return -1
+	
 	# First, find first line containing some kind of message date
 	# that is on or after our start date.
 	
@@ -1138,17 +1166,19 @@ def print_head (logName: str, count: int, header: bool, succinct: bool) -> bool:
 			lineCounter -= 1
 			if lineCounter < 1: break
 	
+	if lineList != None and len (lineList) == 0:
+		print ('<' + logName + ' has no messages>')
+
 	for lineNum in lineList:
 		print (expand_tabs_for_line (logName, linecache.getline (logPath, lineNum)),end='')
 			
 	return len (lineList) + headerCount
-
     
 #
 #	p r i n t _ t a i l
 #
 
-def print_tail (logName: str, count: int, header: bool, succinct: bool) -> bool:
+def print_tail (logName: str, count: int, header: bool, succinct: bool) -> int:
     
 	"""
 	Print up to 'count' number of lines of text from the end of the file at path.
@@ -1161,6 +1191,12 @@ def print_tail (logName: str, count: int, header: bool, succinct: bool) -> bool:
 	lineCount = count
 	
 	logPath =  get_log_path (logName)
+	
+	try:
+		check_file_validity (logPath)
+	except FileCheckError as e:
+		print ('Error:', e)
+		return -1
 	
 	# TODO: only print headers if there's log output
 	if header:
@@ -1252,13 +1288,16 @@ def main():
 		if args.lognames:
 			print_log_names()
 			ignorePositionals = True
+			
 		if args.list:
 			print_log_info()
 			ignorePositionals = True
+			
 		if args.set:
 			# Do first in case enabling a log
 			handle_set (args.set)
 			ignorePositionals = True
+			
 		if args.version:
 			print_version()
 			ignorePositionals = True
@@ -1319,13 +1358,13 @@ def main():
 		linesPrinted = 0;
 		lastLog = args.logs[-1]
 
-		linesPerLog,screenLinesCounter = calc_row_metrics (numLogsToPrint, args.number[0])
+		numMode,linesPerLog,screenLinesCounter = calc_row_metrics (numLogsToPrint, args.number[0])
 		if linesPerLog < 1: break
 
 		#print (logLinesCountVal, linesPerLog, screenLinesCounter)
 
 		for logName in args.logs:
-			if logName == lastLog:
+			if logName == lastLog and numMode == 's':
 				linesPerLog = screenLinesCounter			# Use whatever is left for last log (eg, there may be a remainder)
 
 			linesPrinted = print_log (logName, linesPerLog)
