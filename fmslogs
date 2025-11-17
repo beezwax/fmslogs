@@ -1016,7 +1016,7 @@ def print_log_names():
 
 def print_log_info():
 	"""Print one line per supported log with path, size, creation & mod timestamps."""
-	print ('LOG NAME                 SIZE  CREATED                   MODIFIED')
+	print ('LOG NAME                    SIZE  CREATED                    MODIFIED')
 	for log in LOG_CHOICES:
 		fullPath = log_full_path (log)
 				
@@ -1039,14 +1039,15 @@ def print_log_info():
 			
 			if platform.system() == 'Linux':
 				# TODO: Replace with a more accurate method unless st_birthtime fixed in Python 3.15
-				createTimestamp = time.ctime(statInfo.st_ctime
+				createTimestamp = subprocess.run(['stat', '-c', '%w', fullPath], capture_output=True, text=True).stdout[:19]
 			else:
 				createTimestamp = time.ctime(statInfo.st_birthtime)
+				#createTimestamp = datetime.datetime.fromtimestamp(statInfo.st_birthtime).isoformat()
 			
-			size = os.path.getsize(fullPath)
-			print('{:18} {:>10}  {:<27}  {:<27}'.format (log, size, createTimestamp, modTimestamp))
+			size = statInfo.st_size
+			print('{:21} {:>10}  {:<25}  {:<25}'.format (log, size, createTimestamp, modTimestamp))
 		else:
-			print('{:18}             <missing>'.format (log))
+			print('{:18}                <missing>'.format (log))
 
 #
 #	p r i n t _ l o g _ h e a d e r

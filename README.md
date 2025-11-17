@@ -84,8 +84,19 @@ Disable the printing of any log column headers the command may use, and don't sk
 
 Normally, unless tailing a log or printing a log that does not have any fixed columns, the command includes its own column header as the first line for each log.
 
+### -l, --list
+List all lognames, and for those where a log file is found, list their creation and modification timestamps and their size.
+
+### --lognames
+List all log names known by the command for the current platform, followed by their full paths.
+
 ### -s, --succinct
 Shorten the output of log lines where possible. This includes things like redundant time zones and host names, and shortening some values (eg, Warning becomes Warn).
+
+### -t, --tail
+Print messages as they are added to log files until user cancels with Ctrl-C.
+
+Use the form `--tail=<seconds>` to set how many seconds to wait between checks for new data.
 
 ### --truncate
 Remove any output from the end of the line that would cause a line wrap for the current screen width.
