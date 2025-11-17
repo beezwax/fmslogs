@@ -1032,10 +1032,16 @@ def print_log_info():
 			modTimestamp = time.ctime(modTime)
 			
 			statInfo = os.stat(fullPath)
+			
+			# As of Python 3.12, st_birthtime is only available on macOS & Windows
 			# ubuntu: stat -c "%w" Access.log
-			# macos:  stat -f "%B" 
-			createTimestamp = time.ctime(statInfo.st_birthtime)
-			#createTimestamp = datetime.datetime.fromtimestamp (statInfo.st_birthtime)
+			# macos:  stat -f "%B"
+			
+			if platform.system() == 'Linux':
+				# TODO: Replace with a more accurate method unless st_birthtime fixed in Python 3.15
+				createTimestamp = time.ctime(statInfo.st_ctime
+			else:
+				createTimestamp = time.ctime(statInfo.st_birthtime)
 			
 			size = os.path.getsize(fullPath)
 			print('{:18} {:>10}  {:<27}  {:<27}'.format (log, size, createTimestamp, modTimestamp))
