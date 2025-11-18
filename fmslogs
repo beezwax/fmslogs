@@ -339,6 +339,20 @@ LOG_SPECS_DARWIN = {
 }
 
 LOG_SPECS_LINUX = {
+	'nginxaccess': {
+		'path': 'NginxServer/logs/nginx-access.log',
+		'lghd': True,
+		'head': None,
+		'tbst': 8
+	},
+
+	'nginxerror': {
+		'path': 'NginxServer/logs/nginx-error.log',
+		'lghd': True,  
+		'head': None,
+		'tbst': 8
+	},
+
 	'stdoutserverscripting': {
 		'path': 'Logs/StdOutServerScripting.log',
 		'lghd': False,
