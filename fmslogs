@@ -565,6 +565,7 @@ def setup_parser() -> argparse.ArgumentParser:
 	parser.add_argument('--tail', dest='tail', type=float, nargs=1, default=[-1.0], help='wait for any new messages, specifying number of seconds to wait for each file')
 	parser.add_argument('--truncate', action='store_true', help='cut off any output if beyond width of screen')
 	parser.add_argument('-u', '--user', help='FMS console or SSH account name')
+	parser.add_argument('-N', '--network', help='list connections and their status')	# TODO: change to --status?
 	parser.add_argument('-v', '--version', action='store_true', help='version info')
 	# Hack to avoid error if there is only an option specified but no positional argument
 	parser.add_argument('logs', nargs='*', help='log name to display')
@@ -1194,7 +1195,44 @@ def print_head (logName: str, count: int, header: bool, succinct: bool) -> bool:
 		print (expand_tabs_for_line (logName, linecache.getline (logPath, lineNum)),end='')
 			
 	return len (lineList) + headerCount
-    
+
+
+def list_open_ports() -> list:
+	'''
+	List the open (listening) ports for any processes using the fmserver user.
+	'''
+	currPlatform = platform.system()
+	openList = []
+	
+	if currPlatform == 'Darwin' or currPlatform == 'Linux':
+		if os.getuid() != 0:
+			print ('Running lsof command with sudo, you may be prompted for credentials.')
+		lsofLines = subprocess.run(['sudo','lsof', '-P', '-u', 'fmserver', '+c16'], capture_output=True, text=True).stdout.split('\n')
+		for line in lsofLines:
+			if '(LISTEN)' in line:
+				items = line.split()
+				portNum = int (re.search(r'\d+',items[8]).group())
+				# process name, IP version, connection, port
+				openList.append ((items[0],items[4],items[8],portNum))
+		# remove duplicates (eg, nginx)
+		openList = list (set (openList))
+		openList.sort(key=lambda tupl: tupl[3])
+	return openList
+	
+	
+
+#
+#	p r i n t _ n e t _ s t a t u s
+#
+
+def print_network_status():
+	
+	#' | grep -E "LISTEN" | sort -n -k 8'
+	
+	openPorts = list_open_ports()
+	for line in openPorts:
+		print (items[0],items[4],items[8])
+
 #
 #	p r i n t _ t a i l
 #
@@ -1286,6 +1324,7 @@ def print_version():
 	print ()
 	print (VERSION)
 	print ('Latest version at: https://github.com/beezwax/fmslogs')
+	print ('Questions or comments: info@beezwax.net')
 	print ()
 
 
@@ -1330,7 +1369,10 @@ def main():
 			TIMESTAMP_START = parse_begin_time (args.begin[0])
 		
 		if args.edit:
-				edit_log (args.edit[0])
+			edit_log (args.edit[0])
+		
+		if args.running:
+			print_status()
 			
 		if args.head:
 			OUTPUT_MODE = OutputMode.HEAD
