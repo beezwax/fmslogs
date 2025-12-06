@@ -8,7 +8,7 @@ Version: 0.20, 2025-11-13
 Purpose: Display FileMaker Server logs and change logging options.
 """
 
-import argparse, curses, datetime, linecache, os, pathlib, platform, re, subprocess, sys, textwrap, time
+import argparse, curses, datetime, glob, linecache, os, pathlib, platform, re, subprocess, sys, textwrap, time
 from collections import OrderedDict
 from enum import Enum
 from contextlib import ExitStack
@@ -325,17 +325,64 @@ LOG_SPECS_DARWIN = {
 	'stderr': {
 		'path': 'Logs/stderr.log',
 		'lghd': False,
-		'lghd': False,
 		'head': None,
 		'tbst': 8
 	},
 	'stdout': {
 		'path': 'Logs/stdout.log',
 		'lghd': False,
-		'lghd': False,
 		'head': None,
 		'tbst': 8
 	},
+	'httpaccess': {
+		'path': 'HTTPServer/logs/access_log.*'
+		'lghd': False,
+		#        [04/Nov/2025:09:48:53 -0800] 127.0.0.1 TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256 "GET /fmi/mwpew/wpe/prefs HTTP/1.1" 384
+		'head': 'TIMESTAMP                    HOST      VERSION CIPHER                      OP   PATH',
+		'tbst': 8
+	}
+	'httpdctlerr': {
+		'path': 'HTTPServer/logs/httpdctl.err,
+		'lghd': False,
+		#        [04/Nov/2025:09:48:53 -0800] 127.0.0.1 TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256 "GET /fmi/mwpew/wpe/prefs HTTP/1.1" 384
+		'head': 'TIMESTAMP                    HOST      VERSION CIPHER                      OP   PATH',
+		'tbst': 8
+	}
+	'httpdctlout': {
+		'path': 'HTTPServer/logs/httpdctl.out',
+		'lghd': False,
+		#        [04/Nov/2025:09:48:53 -0800] 127.0.0.1 TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256 "GET /fmi/mwpew/wpe/prefs HTTP/1.1" 384
+		'head': 'TIMESTAMP                    HOST      VERSION CIPHER                      OP   PATH',
+		'tbst': 8
+	}
+	'httperror': {
+		'path': 'HTTPServer/logs/error_log.*',
+		'lghd': False,
+		#        [04/Nov/2025:09:48:53 -0800] 127.0.0.1 TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256 "GET /fmi/mwpew/wpe/prefs HTTP/1.1" 384
+		'head': 'TIMESTAMP                    HOST      VERSION CIPHER                      OP   PATH',
+		'tbst': 8
+	}
+	'httpsslaccess': {
+		'path': 'HTTPServer/logs/ssl_access_log.*',
+		'lghd': False,
+		#        [04/Nov/2025:09:48:53 -0800] 127.0.0.1 TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256 "GET /fmi/mwpew/wpe/prefs HTTP/1.1" 384
+		'head': 'TIMESTAMP                    HOST      VERSION CIPHER                      OP   PATH',
+		'tbst': 8
+	}
+	'httpsslerror': {
+		'path': 'HTTPServer/logs/ssl_error_log.*',
+		'lghd': False,
+		#        [04/Nov/2025:09:48:53 -0800] 127.0.0.1 TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256 "GET /fmi/mwpew/wpe/prefs HTTP/1.1" 384
+		'head': 'TIMESTAMP                    HOST      VERSION CIPHER                      OP   PATH',
+		'tbst': 8
+	}
+	'httpsslrequest': {
+		'path': 'HTTPServer/logs/ssl_request_log.*',
+		'lghd': False,
+		#        [04/Nov/2025:09:48:53 -0800] 127.0.0.1 TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256 "GET /fmi/mwpew/wpe/prefs HTTP/1.1" 384
+		'head': 'TIMESTAMP                    HOST      VERSION CIPHER                      OP   PATH',
+		'tbst': 8
+	}
 }
 
 LOG_SPECS_LINUX = {
@@ -476,7 +523,18 @@ def get_log_path (log: str) -> str:
 	# TODO: convert Windows paths
 	#print ('basePath:', BASE_PATH)
 	#print ('logPath', LOG_PATHS [log])
-	return BASE_PATH + '/' + LOG_SPECS [log]['path']
+	pathSuffix = LOG_SPECS [log]['path']
+
+	if pathSuffix[0] != '/':
+		fullPath = BASE_PATH + '/' + LOG_SPECS[log]['path']
+	else:
+		fullPath = LOG_SPECS[log]['path']
+
+	if '*' in pathSuffix:
+		pathList = glob.glob (fullPath)
+		pathList.sort(reverse=True) # so that newest file is first
+		fullPath = pathList[0]
+	return fullPath
 
 
 #
@@ -863,16 +921,6 @@ def follow_file(some_file):
 		except IOError:
 			yield ''
 
-#
-#	l o g _ f u l l _ p a t h
-#
-
-def log_full_path(log: str) -> str:
-	if LOG_SPECS[log]['path'][0] != '/':
-		return BASE_PATH + '/' + LOG_SPECS[log]['path']
-	else:
-		return LOG_SPECS[log]['path']
-
 # =================
 
 class TailPrint (object):
@@ -890,7 +938,7 @@ class TailPrint (object):
 		self.logPaths = []
 		
 		for log in logNames:
-			path = log_full_path (log)
+			path = get_log_path (log)
 			self.check_file_validity(path)
 			self.logNames.append (log)
 			self.logPaths.append (path)
@@ -1026,7 +1074,7 @@ def print_log_names():
 	"""Print out log names as used by command with their expected paths."""
 	print ('LOG NAME                PATH')
 	for log in LOG_CHOICES:
-		print('{:22}  {:<40}'.format (log, log_full_path(log)))
+		print('{:22}  {:<40}'.format (log, get_log_path (log)))
 
 #
 #	p r i n t _ l o g _ i n f o
@@ -1036,7 +1084,7 @@ def print_log_info():
 	"""Print one line per supported log with path, size, creation & mod timestamps."""
 	print ('LOG NAME                    SIZE  CREATED                    MODIFIED')
 	for log in LOG_CHOICES:
-		fullPath = log_full_path (log)
+		fullPath = get_log_path (log)
 				
 		#TODO: check for permissions issue
 
@@ -1244,7 +1292,7 @@ def print_net_status():
 	
 	#' | grep -E "LISTEN" | sort -n -k 8'
 	
-	openPorts = list_open_ports()
+	openPorts = list_active_ports()
 	print ("PROCESS              VERS  CONNECTION")
 	for line in openPorts:
 		#print (items[0],items[4],items[8])
@@ -1394,6 +1442,10 @@ def main():
 			
 		if args.head:
 			OUTPUT_MODE = OutputMode.HEAD
+		
+		if args.begin:
+			# Use head mode with the -b option
+			OUTPUT_MODE = OutputMode.HEAD			
 		
 		if args.headers_off:
 			SHOW_HEADERS = False

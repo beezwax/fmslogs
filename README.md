@@ -25,7 +25,7 @@ Current functionality with major issues:
 - `-S` or `--set`: not working
 - `-s` or `--succinct`: not working
 - `--ssh`: not working
-- `-t` or `--tail`: does not yet print current log segment before starting to follow
+- `-t` or `--tail`: does not print current log segment before starting to follow
 - not including nginx/apache/IIS logs
  
 ---
@@ -49,7 +49,8 @@ options:
   -l, --list            list all log files, including size, date created & modified, sorted by modification time
   -L, --lognames        list log names supported by command
   -m, --merge           combine output of two or more logs
-  -r, --range RANGE     range or number of lines to print
+  -n, --number RANGE    quantity of lines to print
+  -N, --network         Network status
   -S, --set SET         change log configuration option
   -s, --succinct        strip less useful details from log output
   --ssh SSH             use the connection string to fetch logs from remote server
@@ -100,3 +101,6 @@ Use the form `--tail=<seconds>` to set how many seconds to wait between checks f
 
 ### --truncate
 Remove any output from the end of the line that would cause a line wrap for the current screen width.
+
+### -v, --version
+Print version and contact information for fmslogs command.
