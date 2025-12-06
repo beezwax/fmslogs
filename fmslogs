@@ -334,55 +334,6 @@ LOG_SPECS_DARWIN = {
 		'head': None,
 		'tbst': 8
 	},
-	'httpaccess': {
-		'path': 'HTTPServer/logs/access_log.*'
-		'lghd': False,
-		#        [04/Nov/2025:09:48:53 -0800] 127.0.0.1 TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256 "GET /fmi/mwpew/wpe/prefs HTTP/1.1" 384
-		'head': 'TIMESTAMP                    HOST      VERSION CIPHER                      OP   PATH',
-		'tbst': 8
-	}
-	'httpdctlerr': {
-		'path': 'HTTPServer/logs/httpdctl.err,
-		'lghd': False,
-		#        [04/Nov/2025:09:48:53 -0800] 127.0.0.1 TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256 "GET /fmi/mwpew/wpe/prefs HTTP/1.1" 384
-		'head': 'TIMESTAMP                    HOST      VERSION CIPHER                      OP   PATH',
-		'tbst': 8
-	}
-	'httpdctlout': {
-		'path': 'HTTPServer/logs/httpdctl.out',
-		'lghd': False,
-		#        [04/Nov/2025:09:48:53 -0800] 127.0.0.1 TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256 "GET /fmi/mwpew/wpe/prefs HTTP/1.1" 384
-		'head': 'TIMESTAMP                    HOST      VERSION CIPHER                      OP   PATH',
-		'tbst': 8
-	}
-	'httperror': {
-		'path': 'HTTPServer/logs/error_log.*',
-		'lghd': False,
-		#        [04/Nov/2025:09:48:53 -0800] 127.0.0.1 TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256 "GET /fmi/mwpew/wpe/prefs HTTP/1.1" 384
-		'head': 'TIMESTAMP                    HOST      VERSION CIPHER                      OP   PATH',
-		'tbst': 8
-	}
-	'httpsslaccess': {
-		'path': 'HTTPServer/logs/ssl_access_log.*',
-		'lghd': False,
-		#        [04/Nov/2025:09:48:53 -0800] 127.0.0.1 TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256 "GET /fmi/mwpew/wpe/prefs HTTP/1.1" 384
-		'head': 'TIMESTAMP                    HOST      VERSION CIPHER                      OP   PATH',
-		'tbst': 8
-	}
-	'httpsslerror': {
-		'path': 'HTTPServer/logs/ssl_error_log.*',
-		'lghd': False,
-		#        [04/Nov/2025:09:48:53 -0800] 127.0.0.1 TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256 "GET /fmi/mwpew/wpe/prefs HTTP/1.1" 384
-		'head': 'TIMESTAMP                    HOST      VERSION CIPHER                      OP   PATH',
-		'tbst': 8
-	}
-	'httpsslrequest': {
-		'path': 'HTTPServer/logs/ssl_request_log.*',
-		'lghd': False,
-		#        [04/Nov/2025:09:48:53 -0800] 127.0.0.1 TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256 "GET /fmi/mwpew/wpe/prefs HTTP/1.1" 384
-		'head': 'TIMESTAMP                    HOST      VERSION CIPHER                      OP   PATH',
-		'tbst': 8
-	}
 }
 
 LOG_SPECS_LINUX = {
@@ -414,12 +365,65 @@ LOG_SPECS_LINUX = {
 		'head': None,
 		'tbst': 8
 	},
+}
 
+LOG_SPECS_APACHE = {
+	'httpaccess': {
+		'path': 'HTTPServer/logs/access_log.*',
+		'lghd': False,
+		#        [04/Nov/2025:09:48:53 -0800] 127.0.0.1 TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256 "GET /fmi/mwpew/wpe/prefs HTTP/1.1" 384
+		'head': 'TIMESTAMP                    HOST      VERSION CIPHER                      OP   PATH',
+		'tbst': 8
+	},
+	'httpdctlerr': {
+		'path': 'HTTPServer/logs/httpdctl.err',
+		'lghd': False,
+		#        [04/Nov/2025:09:48:53 -0800] 127.0.0.1 TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256 "GET /fmi/mwpew/wpe/prefs HTTP/1.1" 384
+		'head': 'TIMESTAMP                    HOST      VERSION CIPHER                      OP   PATH',
+		'tbst': 8
+	},
+	'httpdctlout': {
+		'path': 'HTTPServer/logs/httpdctl.out',
+		'lghd': False,
+		#        [04/Nov/2025:09:48:53 -0800] 127.0.0.1 TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256 "GET /fmi/mwpew/wpe/prefs HTTP/1.1" 384
+		'head': 'TIMESTAMP                    HOST      VERSION CIPHER                      OP   PATH',
+		'tbst': 8
+	},
+	'httperror': {
+		'path': 'HTTPServer/logs/error_log.*',
+		'lghd': False,
+		#        [04/Nov/2025:09:48:53 -0800] 127.0.0.1 TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256 "GET /fmi/mwpew/wpe/prefs HTTP/1.1" 384
+		'head': 'TIMESTAMP                    HOST      VERSION CIPHER                      OP   PATH',
+		'tbst': 8
+	},
+	'httpsslaccess': {
+		'path': 'HTTPServer/logs/ssl_access_log.*',
+		'lghd': False,
+		#        [04/Nov/2025:09:48:53 -0800] 127.0.0.1 TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256 "GET /fmi/mwpew/wpe/prefs HTTP/1.1" 384
+		'head': 'TIMESTAMP                    HOST      VERSION CIPHER                      OP   PATH',
+		'tbst': 8
+	},
+	'httpsslerror': {
+		'path': 'HTTPServer/logs/ssl_error_log.*',
+		'lghd': False,
+		#        [04/Nov/2025:09:48:53 -0800] 127.0.0.1 TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256 "GET /fmi/mwpew/wpe/prefs HTTP/1.1" 384
+		'head': 'TIMESTAMP                    HOST      VERSION CIPHER                      OP   PATH',
+		'tbst': 8
+	},
+	'httpsslrequest': {
+		'path': 'HTTPServer/logs/ssl_request_log.*',
+		'lghd': False,
+		#        [04/Nov/2025:09:48:53 -0800] 127.0.0.1 TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256 "GET /fmi/mwpew/wpe/prefs HTTP/1.1" 384
+		'head': 'TIMESTAMP                    HOST      VERSION CIPHER                      OP   PATH',
+		'tbst': 8
+	}
 }
 
 LOG_SPECS_DARWIN.update (LOG_SPECS_BASE)
+LOG_SPECS_DARWIN.update (LOG_SPECS_APACHE)
 
 LOG_SPECS_LINUX.update (LOG_SPECS_BASE)
+LOG_SPECS_LINUX.update (LOG_SPECS_APACHE)	# although not default, Apache can be used on Linux
 
 LOG_SPECS_WINDOWS = LOG_SPECS_BASE
 
