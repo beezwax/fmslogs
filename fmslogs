@@ -323,13 +323,13 @@ LOG_SPECS_DARWIN = {
 		'tbst': 8
 	},
 	'stderr': {
-		'path': 'Logs/stderr.log',
+		'path': 'Logs/stderr',
 		'lghd': False,
 		'head': None,
 		'tbst': 8
 	},
 	'stdout': {
-		'path': 'Logs/stdout.log',
+		'path': 'Logs/stdout',
 		'lghd': False,
 		'head': None,
 		'tbst': 8
