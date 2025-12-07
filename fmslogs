@@ -1117,7 +1117,7 @@ def print_log_info():
 			size = statInfo.st_size
 			print('{:21} {:>10}  {:<25}  {:<25}'.format (log, size, createTimestamp, modTimestamp))
 		else:
-			print('{:18}                <missing>'.format (log))
+			print('{:21}             <missing>'.format (log))
 
 #
 #	p r i n t _ l o g _ h e a d e r
@@ -1242,6 +1242,7 @@ def print_head (logName: str, count: int, header: bool, succinct: bool) -> bool:
 				lineList.append (lineNum)
 			lineCounter -= 1
 			if lineCounter < 1: break
+			lineNum += 1
 	
 	if lineList != None and len (lineList) == 0:
 		print ('<' + logName + ' has no messages>')
