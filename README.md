@@ -31,7 +31,7 @@ Current functionality with major issues:
 ---
 
 ```
-usage: fmslogs [-f FILTER] [-h [HEAD ...]] [--help] [-l] [-L] [-m] [-r RANGE] [-S SET] [-s] [-t] [--truncate] [-v] [LOG1] [LOG2]
+usage: fmslogs [-b BEGIN] [-e EDIT] [-f FILTER] [-h] [-H] [--help] [-l] [-L] [-m] [-n NUMBER] [-p PASSWORD] [-S SET] [-s] [--ssh SSH] [-t] [--tail TAIL] [--truncate] [-u USER] [-N] [-v] [logs ...]
                [{access,admin,clientstats,dapi,events,fac,fmodatadebug,fmsadmindebug,fmsasedebug,fmscwpc,fmscwpcli,fmsdebug,fmsgetpasskeyebug,fmshdebug,fmshelper,fmslogdebug,fmwipd,install,loadschedules,odata,scriptevent,stats,stderr,stdout,topcall,trimlog,wpe,wpedebug,interval,clientstats,fmsdebug,logsize,topcall}]
                
 View FileMaker Server logs and set logging options
@@ -48,15 +48,14 @@ options:
   -H, --headers-off     turn off headers for all logs
   -l, --list            list all log files, including size, date created & modified, sorted by modification time
   -L, --lognames        list log names supported by command
-  -m, --merge           combine output of two or more logs
   -n, --number RANGE    quantity of lines to print
-  -N, --network         Network status
+  -N, --network         Network usage info
   -S, --set SET         change log configuration option
-  -s, --succinct        strip less useful details from log output
+  -s, --succinct        strip less useful details from log output (partially implemented)
   --ssh SSH             use the connection string to fetch logs from remote server
   -t, --tail            wait for any new messages after printing current end of log
   --truncate            cut off any output if beyond width of screen
-  -v, --version         version info
+  -V, --version         version info
 ```
 
 ---
@@ -80,6 +79,9 @@ Only display messages matching the given regular expression (regex). Filtering w
 
 The version of regex expressions used is similar to Perl's regex (often called PCRE), but is specific to Python.
 
+### -h, --head
+Display the start of the specified log files instead of its end (tail).
+
 ### -H, --headers-off
 Disable the printing of any log column headers the command may use, and don't skip any column headers present in the log files.
 
@@ -95,6 +97,9 @@ List all log names known by the command for the current platform, followed by th
 Number of log message lines or screens to print. For screens, add 's' as a suffix, e.g. '-n 2s' for two screens. Since some messages may not fit current screen size
 you may want to use the --truncate option to have an exact fit.
 
+### -N, --network
+List ports in use by FileMaker's processes.
+
 ### -s, --succinct
 Shorten the output of log lines where possible. This includes things like redundant time zones and host names, and shortening some values (eg, Warning becomes Warn).
 
@@ -106,5 +111,5 @@ Use the form `--tail=<seconds>` to set how many seconds to wait between checks f
 ### --truncate
 Remove any output from the end of the line that would cause a line wrap for the current screen width.
 
-### -v, --version
+### -V, --version
 Print version and contact information for fmslogs command.
