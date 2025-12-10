@@ -14,6 +14,17 @@ Design Goals:
 - no dependencies other than the core Python libraries, and requiring just one file to be copied onto server
 - support all three server environments: macOS, Ubuntu, and Windows
 - consolidates access to various logs
+- no import step needed
+
+---
+
+## REFERENCES & RELATED
+
+* FMS Help - Event log: https://help.claris.com/en/server-help/content/monitor-event-log.html
+* General Web Publishing Settings for Server: https://support.claris.com/s/answerview?anum=000023506
+* Log Viewer for Claris FileMaker: https://luminfire.com/our-solutions/claris-filemaker-log-viewer/
+* Top Call statistics logging: https://support.claris.com/s/answerview?anum=000025776
+* Tracking activity in log files in FileMaker Server: https://support.claris.com/s/article/Tracking-activity-in-log-files-in-FileMaker-Server-1503692942153
 
 ---
 
