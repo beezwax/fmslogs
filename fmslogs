@@ -4,7 +4,7 @@
 """
 Filename: fmslogs.py
 Author: Simon Brown on 10/15/2025
-Version: 0.21, 2025-11-13
+Version: 0.22, 2025-12-09
 Purpose: Display FileMaker Server logs and change logging options.
 """
 
@@ -33,7 +33,7 @@ fmslogs -s topcall 1 # enable TopCall.log
 open either directory or log file in text editor, eg $EDITOR
 """
 
-VERSION = "0.21 - 2025-12-08"
+VERSION = "0.22 - 2025-12-09"
 TIMESTAMP_START = None
 FILTER_REGEX = None
 TEXTWRAP = textwrap.TextWrapper(width=120,tabsize=10)
@@ -146,7 +146,7 @@ LOG_SPECS_BASE = {
 		'head': 'TIMESTAMP                ZONE  LEVEL        CODE  HOST                            MESSAGE',
 		'tbst': [31,44,50,82],
 		#			2025-08-18 23:15:30.125  Information  228   some-dev.filemaker.beezwax.net  The previous log file reached maximum size, and was renamed to "Event-old.log".
-		'shed': 'TIMESTAMP                LEVEL        CODE  HOST                            MESSAGE',
+		'shed': 'TIMESTAMP                LEVEL        CODE  MESSAGE',
 		'shtb': [26,39,45,77]
 	},
 	
@@ -553,13 +553,14 @@ def strip_line (logName: str, line: str) -> str:
 	
 	if logName in ['access','events']:
 		if line [24] == '-':
-			line = line [:23] + line [29:51] + line [90:]		# remove timezone and hostname
-	if logname == 'admin':
+			items = line.split('\t')
+			line = '{:23.23}  {:10}  {:4}  {:<}'.format (items[0], items[1], items[2], items[4])		# remove timezone and hostname
+	if logName == 'admin':
 		if line [20] == '-':
 			line = line [:20] + line [26:]							# remove timezone
 	if logName in ['clientstats','dapi','topcall']:
 			line = line [:23] + line [29]								# remove timezone
-	if logname == 'dapi':
+	if logName == 'dapi':
 			line = line [:23] + line [29:45] + line[62:]			# remove timezone & hostname
 
 	return line
@@ -1372,11 +1373,11 @@ def print_tail (logName: str, count: int, header: bool, succinct: bool) -> int:
 			# Remove the header line, we'll be using our own
 			del lineList[0]
 
-	if succinct and 'shtb' in LOG_SPECS['access'].keys():
+	if succinct and 'shtb' in LOG_SPECS[logName].keys():
 		for lineNum in lineList:
-			line = strip_line (logName, linecache.getline (logPath, lineNum),end='')
+			line = strip_line (logName, linecache.getline (logPath, lineNum))
 			try:
-				print (expand_tabs_for_line (logName, line))
+				print (expand_tabs_for_line (logName, line), end='')
 			except BrokenPipeError:
 				# Catch errors if output is piped and the other end closes prematurely (eg, using `head`).
 				# Use below to avoid a later error when Python flushes stdout
