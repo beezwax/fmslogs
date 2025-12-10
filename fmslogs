@@ -111,6 +111,19 @@ LOG_SPECS_BASE = {
 		'shed': 'TIMESTAMP           {LEVEL}   {END} {ADDRESS}   {COMPONENT}    {TYPE}    {CODE}  MESSAGE',
 		'shtb': [23]
 	},
+
+	'catalina': {
+		'path': 'Web Publishing/publishing-engine/jwpc-tomcat/logs/catalina.*',
+		'lghd': False,
+		#        ----------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
+		#        09-Dec-2025 09:31:08.332 WARNING [main] org.apache.tomcat.util.digester.SetPropertiesRule.begin Match [Server/Listener] failed to set property [AWTThreadProtection] to [true]
+		#			will also include backtraces
+		'head': 'Catalina.*.log                 NET BYTES  NET BYTES  CALLS      CALLS      TIME       TIME       TIME\n' + \
+				  'TIMESTAMP                      IN         OUT        COMPLETE   IN PROG    ELAPSED    WAIT       I/O        CLIENT NAME',
+		'tbst': [31,42,53,64,75,86,97,108],
+	},
+
+
 	'clientstats': {
 		'path': 'Logs/ClientStats.log',
 		'lghd': True,
