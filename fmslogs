@@ -567,7 +567,7 @@ def strip_line (logName: str, line: str) -> str:
 	if logName in ['access','events']:
 		if line [24] == '-':
 			items = line.split('\t')
-			line = '{:23.23}  {:10}  {:4}  {:<}'.format (items[0], items[1], items[2], items[4])		# remove timezone and hostname
+			line = '{:23.23}  {:11}  {:4}  {:<}'.format (items[0], items[1], items[2], items[4])		# remove timezone and hostname
 	if logName == 'admin':
 		if line [20] == '-':
 			line = line [:20] + line [26:]							# remove timezone

@@ -21,6 +21,7 @@ Design Goals:
 ## REFERENCES & RELATED
 
 * FMS Help - Event log: https://help.claris.com/en/server-help/content/monitor-event-log.html
+* FMS Help - Monitoring FileMaker Server: https://help.claris.com/en/server-help/content/monitor-server.html
 * General Web Publishing Settings for Server: https://support.claris.com/s/answerview?anum=000023506
 * Log Viewer for Claris FileMaker: https://luminfire.com/our-solutions/claris-filemaker-log-viewer/
 * Top Call statistics logging: https://support.claris.com/s/answerview?anum=000025776
