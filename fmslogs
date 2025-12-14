@@ -335,6 +335,12 @@ LOG_SPECS_DARWIN = {
 		'head': None,
 		'tbst': 8
 	},
+	'syslog': {
+		'path': '!/usr/bin/log',
+		'lghd': False,
+		'head': None,
+		'tbst': 8
+	},
 	'stderr': {
 		'path': 'Logs/stderr',
 		'lghd': False,
@@ -462,12 +468,7 @@ CLARIS_CONFIG = """
 	"AlwaysPrint": true,
 	"CLI" : true,
 	"CertVerify" : true,
-	"ForceOutput": true,
-	"Server": true,
-	"ServerCommands": true,
-	"ServerComponents": true,
-	"ServerDependencies": true,
-	"WebServices": true
+	"ForceOutput": true
 }
 """
 
@@ -597,34 +598,13 @@ def get_log_path (log: str) -> str:
 
 	if '*' in pathSuffix:
 		pathList = glob.glob (fullPath)
-		pathList.sort(reverse=True) # so that newest file is first
-		fullPath = pathList[0]
-	return fullPath
-
-
-#
-#	s t r i p _ l i n e
-#
-
-def strip_line (logName: str, line: str) -> str:
-	"""
-	When possible, remove repetitive or extraneous text in the logs.
-	This is done after expanding tabs so columns should be at fixed positions.
-	"""
+		if pathList != []:
+			pathList.sort(reverse=True) # so that newest file is first
+			fullPath = pathList[0]
+		else:
+			fullPath = None
 	
-	if logName in ['access','event']:
-		if line [24] == '-':
-			items = line.split('\t')
-			line = '{:23.23}  {:11}  {:4}  {:<}'.format (items[0], items[1], items[2], items[4])		# remove timezone and hostname
-	if logName == 'admin':
-		if line [20] == '-':
-			line = line [:20] + line [26:]							# remove timezone
-	if logName in ['clientstats','dapi','topcall']:
-			line = line [:23] + line [29]								# remove timezone
-	if logName == 'dapi':
-			line = line [:23] + line [29:45] + line[62:]			# remove timezone & hostname
-
-	return line
+	return fullPath
 
 
 def get_file_timestamps (path: str) -> tuple:
@@ -789,6 +769,19 @@ def find_first_timestamp (filePath: str, timestamp: datetime.datetime) -> int:
 	
 	return lineResult
 
+
+#
+#	h a n d l e _ s e t
+#
+
+def handle_set (verb: str, noun: str):
+	"""
+	Execute the changes specified in parameters.
+	"""
+	
+	if parameters [0] == '':
+		pass
+	
 
 def init_curses():
     global STDSCR, SCREENCOLS, SCREENROWS
@@ -995,6 +988,32 @@ def setup_parser() -> argparse.ArgumentParser:
 	
 	return parser
 
+
+#
+#	s t r i p _ l i n e
+#
+
+def strip_line (logName: str, line: str) -> str:
+	"""
+	When possible, remove repetitive or extraneous text in the logs.
+	This is done after expanding tabs so columns should be at fixed positions.
+	"""
+	
+	if logName in ['access','event']:
+		if line [24] == '-':
+			items = line.split('\t')
+			line = '{:23.23}  {:11}  {:4}  {:<}'.format (items[0], items[1], items[2], items[4])		# remove timezone and hostname
+	if logName == 'admin':
+		if line [20] == '-':
+			line = line [:20] + line [26:]							# remove timezone
+	if logName in ['clientstats','dapi','topcall']:
+			line = line [:23] + line [29]								# remove timezone
+	if logName == 'dapi':
+			line = line [:23] + line [29:45] + line[62:]			# remove timezone & hostname
+
+	return line
+
+
 # =================
 
 class TailPrint (object):
@@ -1160,12 +1179,14 @@ def print_log_info():
 	for log in LOG_CHOICES:
 		fullPath = get_log_path (log)
 				
+		modTime = 0;
 		#TODO: check for permissions issue
 
-		try:
-			modTime = os.path.getmtime(fullPath)
-		except FileNotFoundError:
-			modTime = 0;
+		if fullPath:
+			try:
+				modTime = os.path.getmtime(fullPath)
+			except FileNotFoundError:
+				pass
 
 
 		if modTime > 0:
@@ -1471,7 +1492,7 @@ def main():
 		if args.set:
 			# Do first in case enabling a log
 			print (args.set)
-			handle_set (args.set)
+			handle_set (args.set[0], args.set[1])
 			ignorePositionals = True
 			
 		if args.version:
