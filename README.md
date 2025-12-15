@@ -49,7 +49,7 @@ usage: fmslogs [-b BEGIN] [-e EDIT] [-f FILTER] [-h] [-H] [--help] [-l] [-L] [-m
 View FileMaker Server logs and set logging options
 
 positional arguments (log name):
-  {access,admin,clientstats,dapi,event,fac,fmodatadebug,fmsadmindebug,fmsasedebug,fmscwpc,fmscwpcli,fmsdebug,fmsgetpasskeyebug,fmshdebug,fmshelper,fmslogdebug,fmwipd,httpaccess,httpdctlerr,httpdctlout,httperror,install,httpaccess,loadschedules,odata,scriptevent,stats,stderr,stdout,topcall,trimlog,wpe,wpedebug,interval,clientstats,fmsdebug,logsize,topcall}
+  {access,admin,clientstats,dapi,event,fac,fmodatadebug,fmsadmindebug,fmsasedebug,fmscwpc,fmscwpcli,fmsdebug,fmsgetpasskeyebug,fmshdebug,fmshelper,fmslogdebug,fmwipd,httpaccess,httpdctlerr,httpdctlout,httperror,httpsslaccess,httpsslerror,install,httpaccess,loadschedules,odata,scriptevent,stats,stderr,stdout,topcall,trimlog,wpe,wpedebug,interval,clientstats,fmsdebug,logsize,topcall}
 
 options:
   -b, --begin BEGIN     start at first message on or after time or time interval in BEGIN
@@ -67,7 +67,7 @@ options:
   --ssh SSH             use the connection string to fetch logs from remote server
   -t, --tail            wait for any new messages after printing current end of log
   --truncate            cut off any output if beyond width of screen
-  -V, --version         version info
+  -V, --version         version info for fmslogs and FMS components
 ```
 
 ---
@@ -124,4 +124,4 @@ Use the form `--tail=<seconds>` to set how many seconds to wait between checks f
 Remove any output from the end of the line that would cause a line wrap for the current screen width.
 
 ### -V, --version
-Print version and contact information for fmslogs command.
+Print version and contact information for fmslogs command and FileMaker Server components.

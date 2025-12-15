@@ -4,7 +4,7 @@
 """
 Filename: fmslogs.py
 Author: Simon Brown on 10/15/2025
-Version: 0.22, 2025-12-09
+Version: 0.23, 2025-12-09
 Purpose: Display FileMaker Server logs and change logging options.
 """
 
@@ -33,7 +33,7 @@ fmslogs -s topcall 1 # enable TopCall.log
 open either directory or log file in text editor, eg $EDITOR
 """
 
-VERSION = "0.22 - 2025-12-09"
+VERSION = "0.23 - 2025-12-13"
 TIMESTAMP_START = None
 FILTER_REGEX = None
 TEXTWRAP = textwrap.TextWrapper(width=120,tabsize=10)
@@ -327,7 +327,6 @@ LOG_SPECS_BASE = {
 	}
 }
 
-
 LOG_SPECS_DARWIN = {
 	'install': {
 		'path': 'Logs/install.log',
@@ -530,6 +529,23 @@ def calc_row_metrics (numLogs, logLinesCountVal) -> tuple:
 
 
 #
+#	c h e c k _ f i l e _ v a l i d i t y
+#
+
+def check_file_validity (path: str):
+	'''
+	Check whether the a given file exists, readable and is a file.
+	Return None if no issue found, otherwise return an error message.
+	'''
+	if not os.access(path, os.F_OK):
+		raise FileCheckError ("'%s' does not exist" % (path))
+	if not os.access(path, os.R_OK):
+		raise FileCheckError ("'%s' is not readable" % (path))
+	if os.path.isdir(path):
+		raise FileCheckError ("'%s' is a directory" % (path))
+
+
+#
 #	c o m p i l e _ f i l t e r
 #
 
@@ -547,97 +563,6 @@ def compile_filter(regex: str) -> bool:
 	return isValid
 
 
-# https://gist.github.com/pylixm/e6bd4f5456740c12e462eecbc66692fb # tail/follow a file
-
-def follow_file(some_file):
-	"""
-	was tail_F
-	Capture output as it is added to the file.
-	"""
-	first_call = True
-	while True:
-		try:
-			with open(some_file) as input:
-				if first_call:
-					input.seek(0, 2)
-					first_call = False
-				latest_data = input.read()
-				while True:
-					if '\n' not in latest_data:
-						latest_data += input.read()
-						if '\n' not in latest_data:
-							yield ''
-							if not os.path.isfile(some_file):
-								break
-							continue
-					latest_lines = latest_data.split('\n')
-					if latest_data[-1] != '\n':
-						latest_data = latest_lines[-1]
-					else:
-						latest_data = input.read()
-					for line in latest_lines[:-1]:
-						yield line + '\n'
-		except IOError:
-			yield ''
-
-
-#
-#	g e t _ l o g _ p a t h
-#
-
-def get_log_path (log: str) -> str:
-	# TODO: convert Windows paths
-	#print ('basePath:', BASE_PATH)
-	#print ('logPath', LOG_PATHS [log])
-	pathSuffix = LOG_SPECS [log]['path']
-
-	if pathSuffix[0] != '/':
-		fullPath = BASE_PATH + '/' + LOG_SPECS[log]['path']
-	else:
-		fullPath = LOG_SPECS[log]['path']
-
-	if '*' in pathSuffix:
-		pathList = glob.glob (fullPath)
-		if pathList != []:
-			pathList.sort(reverse=True) # so that newest file is first
-			fullPath = pathList[0]
-		else:
-			fullPath = None
-	
-	return fullPath
-
-
-def get_file_timestamps (path: str) -> tuple:
-	"""Return a file's creation and modification timestamps"""
-	return (os.path.getmtime(path), pathlib.Path(path).stat().st_mtime)
-
-#
-#	c h e c k _ f i l e _ v a l i d i t y
-#
-
-def check_file_validity (path: str):
-	'''
-	Check whether the a given file exists, readable and is a file.
-	Return None if no issue found, otherwise return an error message.
-	'''
-	if not os.access(path, os.F_OK):
-		raise FileCheckError ("'%s' does not exist" % (path))
-	if not os.access(path, os.R_OK):
-		raise FileCheckError ("'%s' is not readable" % (path))
-	if os.path.isdir(path):
-		raise FileCheckError ("'%s' is a directory" % (path))
-	
-class FileCheckError(Exception):
-	def __init__(self, msg):
-		self.message = msg
-	def __str__(self):
-		return self.message
-
-
-def count_fixed_log_references (args: argparse.ArgumentParser) -> int:
-	"""Return the number of logs referenced for output, except if following."""
-	return 0
-
 #
 #	e d i t _ l o g
 #
@@ -648,16 +573,21 @@ def edit_log (logName: str):
 	# TODO: use vi as second fallback if no nano?
 	# TODO: open in GUI editor if available
 	
-	if 'EDITOR' in os.environ:
-		exitCode = subprocess.call ('$EDITOR "' + get_log_path (logName) + '"', shell=True)
-	elif platform.system() == 'Darwin' and subprocess.call (['/usr/bin/pgrep','loginwindow']) == 0:
-		exitCode = subprocess.call (['/usr/bin/open', '-e', get_log_path (logName)])
-	elif platform.system() == 'Windows':
-		exitCode = subprocess.call (['notepad', get_log_path (logName)])		
-	else:
-		exitCode = subprocess.call (['/usr/bin/nano', get_log_path (logName)])
+	# Below will return None if syslog or glob can't find file.
+	logPath = get_log_path (logName)
+	
+	if logPath:
+		if 'EDITOR' in os.environ:
+			exitCode = subprocess.call ('$EDITOR "' + logPath + '"', shell=True)
+		elif platform.system() == 'Darwin' and subprocess.call (['/usr/bin/pgrep','loginwindow']) == 0:
+			exitCode = subprocess.call (['/usr/bin/open', '-e', logPath])
+		elif platform.system() == 'Windows':
+			exitCode = subprocess.call (['notepad', logPath])		
+		else:
+			exitCode = subprocess.call (['/usr/bin/nano', logPath])
 	
 	sys.exit (exitCode)
+
 
 #
 #	e x p a n d _ t a b s _ f o r _ l i n e
@@ -713,6 +643,81 @@ def expand_tabs_for_line (logName: str, line: str) -> str:
 			return line
 	else:
 		return ''.join(result)
+
+
+
+def follow_file(some_file):
+	"""
+	was tail_F
+	Capture output as it is added to the file.
+	"""
+	# https://gist.github.com/pylixm/e6bd4f5456740c12e462eecbc66692fb # tail/follow a file
+	
+	first_call = True
+	while True:
+		try:
+			with open(some_file) as input:
+				if first_call:
+					input.seek(0, 2)
+					first_call = False
+				latest_data = input.read()
+				while True:
+					if '\n' not in latest_data:
+						latest_data += input.read()
+						if '\n' not in latest_data:
+							yield ''
+							if not os.path.isfile(some_file):
+								break
+							continue
+					latest_lines = latest_data.split('\n')
+					if latest_data[-1] != '\n':
+						latest_data = latest_lines[-1]
+					else:
+						latest_data = input.read()
+					for line in latest_lines[:-1]:
+						yield line + '\n'
+		except IOError:
+			yield ''
+
+
+#
+#	g e t _ l o g _ p a t h
+#
+
+def get_log_path (log: str) -> str:
+	# TODO: convert Windows paths
+	#print ('basePath:', BASE_PATH)
+	#print ('logPath', LOG_PATHS [log])
+	pathSuffix = LOG_SPECS [log]['path']
+
+	if pathSuffix[0] == '!':
+		fullPath = None
+	elif pathSuffix[0] != '/':
+		fullPath = BASE_PATH + '/' + LOG_SPECS[log]['path']
+	else:
+		fullPath = LOG_SPECS[log]['path']
+
+	if '*' in pathSuffix:
+		pathList = glob.glob (fullPath)
+		if pathList != []:
+			pathList.sort(reverse=True) # so that newest file is first
+			fullPath = pathList[0]
+		else:
+			fullPath = None
+	
+	return fullPath
+
+
+def get_file_timestamps (path: str) -> tuple:
+	"""Return a file's creation and modification timestamps"""
+	return (os.path.getmtime(path), pathlib.Path(path).stat().st_mtime)
+
+	
+class FileCheckError(Exception):
+	def __init__(self, msg):
+		self.message = msg
+	def __str__(self):
+		return self.message
 
 
 #
@@ -829,6 +834,17 @@ def list_active_ports() -> list:
 		openList = list (set (openList))
 		openList.sort(key=lambda tupl: tupl[4])
 	return openList
+
+
+#
+#	l i s t _ c r a s h _ r e p o r t s
+#
+
+def list_crash_reports() -> list:
+	"""
+	Return the full path of any recent crash report files.
+	"""
+	pass
 
 
 #
@@ -979,7 +995,7 @@ def setup_parser() -> argparse.ArgumentParser:
 	parser.add_argument('--truncate', action='store_true', help='cut off any output if beyond width of screen')
 	parser.add_argument('-u', '--user', help='FMS console or SSH account name')
 	parser.add_argument('-N', '--network', action='store_true', help='list connections and their status') # TODO: throwing "expected log name" error
-	parser.add_argument('-V', '--version', action='store_true', help='version info')
+	parser.add_argument('-V', '--version', action='store_true', help='version info for fmslogs and FMS')
 	# Hack to avoid error if there is only an option specified but no positional argument
 	parser.add_argument('logs', nargs='*', help='log name to display')
 	#parser.add_argument('log2', nargs='?', help='additional log to display')
@@ -1187,8 +1203,7 @@ def print_log_info():
 				modTime = os.path.getmtime(fullPath)
 			except FileNotFoundError:
 				pass
-
-
+		
 		if modTime > 0:
 			modTimestamp = time.ctime(modTime)
 			
@@ -1451,6 +1466,7 @@ def print_tail (logName: str, count: int, header: bool, succinct: bool) -> int:
 	
 	return len (lineList) + headerCount
 
+
 #
 #	p r i n t _ v e r s i o n
 #
@@ -1458,9 +1474,63 @@ def print_tail (logName: str, count: int, header: bool, succinct: bool) -> int:
 def print_version():
 
 	print ()
-	print (VERSION)
+	print ('fmslogs', VERSION)
 	print ('Latest version at: https://github.com/beezwax/fmslogs')
 	print ('Questions or comments: info@beezwax.net')
+	print ()
+	
+	# FMS VERSION
+	
+	if platform.system() == 'Darwin':
+		fmsOutLines = subprocess.run(['/usr/sbin/pkgutil', '--pkg-info','com.filemaker.fms.worker.pkg'], capture_output=True, text=True).stdout.split('\n')
+		print ('FMS:',fmsOutLines[1].split(': ')[1])
+		
+	if platform.system() == 'Linux':
+		fmsOutLines = subprocess.run(['/usr/bin/apt-cache', 'policy', 'filemaker-server'], capture_output=True, text=True).stdout.split('\n')
+		print ('FMS:',fmsOutLines[1].split(': ')[1])
+
+	# OPENSSL
+	
+	if platform.system() == 'Darwin':
+		openSSLWords = subprocess.run(['/Library/FileMaker Server/Database Server/bin/openssl', 'version'], capture_output=True, text=True).stdout.split()
+		print ('OpenSSL:',openSSLWords[1],openSSLWords[2])
+	
+	if platform.system() == 'Linux':
+		openSSLWords = subprocess.run(['/usr/bin/openssl', 'version'], capture_output=True, text=True).stdout.split()
+		print ('OpenSSL:',openSSLWords[1],openSSLWords[2])
+	
+	# APACHE/NGINX/IIS
+	
+	if platform.system() == 'Linux' or platform.system() == 'Windows':
+		if platform.system() == 'Linux':
+			nginxPath = 'C:\\Programs\\'
+		else:
+			nginxPath = '/usr/sbin/nginx'
+		
+		try:
+			nginxOut = subprocess.run([nginxPath, '-v'], capture_output=True, text=True).stderr
+			# nginx version: nginx/1.28.0
+			nginxVers = nginxOut.split ('/')[1] 
+		except FileNotFoundError:
+			nginxVers = 'not present'
+		
+		print ('NGINX:',nginxVers)
+	
+	if platform.system() == 'Darwin':
+		httpdPath = '/usr/sbin/httpd'
+		try:
+			httpdOut = subprocess.run([httpdPath, '-v'], capture_output=True, text=True).stdout
+			# Server version: Apache/2.4.62 (Unix)
+			# Server built:   Nov  8 2025 20:07:11
+			httpdVersLine = httpdOut.split('\n')[0]
+			httpdVers = httpdVersLine.split('/')[1].split()[0]
+		except FileNotFoundError:
+			httpdVers = 'not present'
+		print ('Apache:',httpdVers)
+		
+	if platform.system() == 'Windows':
+		print ('IIS: ')
+	
 	print ()
 
 
