@@ -597,6 +597,7 @@ def expand_tabs_for_line (logName: str, line: str) -> str:
 	"""
 	Expands tabs in the string `line` using the given tabstops.
 	`tabstops` can be a list of column positions (e.g., [4, 8, 12]) or a single integer for fixed tab width.
+	TODO: truncate if over column width?
 	"""
 	
 	try:
@@ -1503,9 +1504,9 @@ def print_version():
 	
 	if platform.system() == 'Linux' or platform.system() == 'Windows':
 		if platform.system() == 'Linux':
-			nginxPath = 'C:\\Programs\\'
-		else:
 			nginxPath = '/usr/sbin/nginx'
+		else:
+			nginxPath = 'C:\\Programs\\'
 		
 		try:
 			nginxOut = subprocess.run([nginxPath, '-v'], capture_output=True, text=True).stderr

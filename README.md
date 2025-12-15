@@ -124,4 +124,4 @@ Use the form `--tail=<seconds>` to set how many seconds to wait between checks f
 Remove any output from the end of the line that would cause a line wrap for the current screen width.
 
 ### -V, --version
-Print version and contact information for fmslogs command and FileMaker Server components.
+Print version of fmslogs command and FileMaker Server components.
