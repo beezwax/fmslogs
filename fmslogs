@@ -68,6 +68,17 @@ DEF_BASE_PATHS = {
 # This may get overridden by user option,
 BASE_PATH = DEF_BASE_PATHS [platform.system()]
 
+LOG_ALIAS = {
+	('acc', 'access'),
+	('adm', 'admin'),
+	('ada', 'adminapi'),
+	('cat', 'catalina'),
+	('cli', 'clientstats'),
+	('dap', 'dapi'),
+	('eve', 'event'),
+	('adg', 'fmsadmindebug')
+}
+
 # path: location of the log file, starting at the base path
 # lghd: True if the log file has a header line at start of file
 # head: header to use if not succinct mode
@@ -198,23 +209,8 @@ LOG_SPECS_BASE = {
 		'tbst': 8
 	},
 	
-	'fmshelper': {
-		'path': 'Logs/fmshelper.log',
-		'lghd': True,
-			# This log has no consistent format
-			#		2025-08-03 20:12:38.182 -0700   Log file /opt/FileMaker/FileMaker Server/Logs/fmshelper.log size: 478 bytes (0 MB), threshold ratio: 0
-			#		2025-08-03 20:12:38.185 -0700 === stopSystemWebServer()
-			#		(Use `facstart.sh --trace-warnings ...` to show where the warning was created)
-			#		Thrift: Sun Aug  3 20:12:47 2025 TNonblockingServer: Serving with 5 io threads.
-			#		127.0.0.1 POST /fmi/admin/internal/v1/dbs-notification/xPR2AgRM1TODanCZ56eikiYXcbzvTDdtLIbd9Avs3Z4kuxie - - - ms
-			#		Aug 03, 2025 8:12:53 PM org.apache.jasper.servlet.TldScanner scanJars
-			#		2025/08/03 20:39:27.0128: [ 2525]:    TRACE:       mongoc: ENTRY: _mongoc_linux_distro_scanner_get_distro():389
-		'head': None,
-		'tbst': []	# replace any tabs with two spaces
-	},
-
 	'fmshdebug': {
-		'path': 'Logs/fmshDebug.log',
+		'path': 'Database Server/bin/fmshDebug.log',
 		'lghd': True,
 			#		2024-10-21 09:55:47.101 -0700 [HelperApp] Debug::DumpBitSettings() feature(s) enabled: [ AlwaysPrint | Assert | ForceOutput | Backup | UploadDownload | Server | ServerCommands | ServerComponents | ServerDependencies | FMSECLI | NotificationsStackCrawls | Anchors | BPlusTree | FileBox | LicenseServer | CalcEngine | Add-ons | OData | TransactSupport | AdminAPI | CertVerify | CurrentThread | Consolidator | DownloadService | WIP | EditOtherClientLayout | CLI | ThreadedSorting | DisableServerSideSorting | DisableMemoryKeyCmpIndexing | PurgeTempDB | DisableSharingLockOnServer | PersistentData | DisableServerSideSummary | SupportNestedPSOS ]
 			#		2024-10-21 09:55:47.117 -0700 [HelperApp] AdminMgrConfigFile() installation directory = /opt/FileMaker/FileMaker Server/, config file = Admin/conf/deployment.xml, encrypted = false
@@ -355,6 +351,21 @@ LOG_SPECS_DARWIN = {
 }
 
 LOG_SPECS_LINUX = {
+	'fmshelper': {
+		'path': 'Logs/fmshelper.log',
+		'lghd': True,
+			# This log has no consistent format
+			#		2025-08-03 20:12:38.182 -0700   Log file /opt/FileMaker/FileMaker Server/Logs/fmshelper.log size: 478 bytes (0 MB), threshold ratio: 0
+			#		2025-08-03 20:12:38.185 -0700 === stopSystemWebServer()
+			#		(Use `facstart.sh --trace-warnings ...` to show where the warning was created)
+			#		Thrift: Sun Aug  3 20:12:47 2025 TNonblockingServer: Serving with 5 io threads.
+			#		127.0.0.1 POST /fmi/admin/internal/v1/dbs-notification/xPR2AgRM1TODanCZ56eikiYXcbzvTDdtLIbd9Avs3Z4kuxie - - - ms
+			#		Aug 03, 2025 8:12:53 PM org.apache.jasper.servlet.TldScanner scanJars
+			#		2025/08/03 20:39:27.0128: [ 2525]:    TRACE:       mongoc: ENTRY: _mongoc_linux_distro_scanner_get_distro():389
+		'head': None,
+		'tbst': []	# replace any tabs with two spaces
+	},
+
 	'nginxaccess': {
 		'path': 'NginxServer/logs/nginx-access.log',
 		'lghd': True,
@@ -465,8 +476,6 @@ ALL_CHOICES = LOG_CHOICES  # TODO: need to add in choices that aren't log names?
 CLARIS_CONFIG = """
 {
 	"AlwaysPrint": true,
-	"CLI" : true,
-	"CertVerify" : true,
 	"ForceOutput": true
 }
 """
@@ -965,10 +974,10 @@ def read_tail_time (filePath: str, linesFromEnd: int) -> list:
 
 
 #
-#	s e t u p _ p a r s e r
+#	i n i t _ p a r s e r
 #
 
-def setup_parser() -> argparse.ArgumentParser:
+def init_parser() -> argparse.ArgumentParser:
 	"""Setup parameters used for command interface. Does not attempt to parse."""
 
 	parser = argparse.ArgumentParser(
@@ -1542,7 +1551,7 @@ def print_version():
 def main():
 	global OUTPUT_MODE, SHOW_HEADERS, SUCCINCT_MODE, TIMESTAMP_START, TRUNCATE_MODE
 	
-	parser = setup_parser()
+	parser = init_parser()
 	args = parser.parse_args()
 	ignorePositionals = False
 	screenLinesCounter = 0					# if used, will start (num lines on screen * num screens) - space for prompt line
