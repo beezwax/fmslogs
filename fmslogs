@@ -8,7 +8,7 @@ Version: 0.23, 2025-12-09
 Purpose: Display FileMaker Server logs and change logging options.
 """
 
-import argparse, curses, datetime, glob, linecache, os, pathlib, platform, re, subprocess, sys, textwrap, time
+import argparse, curses, datetime, glob, linecache, os, pathlib, platform, re, socket, subprocess, sys, textwrap, time, http.client, ssl
 from collections import OrderedDict
 from enum import Enum
 from contextlib import ExitStack
@@ -76,7 +76,13 @@ LOG_ALIAS = {
 	('cli', 'clientstats'),
 	('dap', 'dapi'),
 	('eve', 'event'),
-	('adg', 'fmsadmindebug')
+	('fad', 'fmsadmindebug'),
+	('fcw', 'fmscwpc'),
+	('fcl', 'fmscwpcli'),
+	('fms', 'fmsdebug'),
+	('fgp', 'fmsgetpasskeydebug'),
+	('fhd', 'fmshdebug'),	# helper debug?
+	('fib', 'fmsibdebug')	# incremental backup
 }
 
 # path: location of the log file, starting at the base path
@@ -536,6 +542,57 @@ def calc_row_metrics (numLogs, logLinesCountVal) -> tuple:
 		
 	return (numMode,linesPerLog,screenLinesCount)
 
+def check_endpoint_status (name: str, host: str, endpoint: str, expectedStatus: int, port=80, useSSL=false) -> bool:
+	"""
+	Check for expected status result for the given endpoint.
+	"""
+	resultFlag = False
+	print ('Checking', name, end='')
+	conn = http.client.HTTPConnection(internAddr, port, timeout=5)
+	try:
+		conn.request("POST", endpoint)
+		response = conn.getresponse()
+		if response.status == expectedStatus:
+			print (': Responding')
+		else:
+			print (': ', response.reason)
+	except http.client.HTTPException as e:
+		print (': ', e)
+	except Exception as e:
+		print (': ', e)
+	finally:
+		conn.close()
+
+def check_connectivity() -> str:
+	"""
+	Check both internal and external interfaces for a response from the DAPI endpoint.
+	"""
+		
+	internAddr = '127.0.0.1'
+	externAddr = get_local_ip()
+	internPrefix = 'http://' + internAddr
+	externPrefix = 'https://' + externAddr
+	# ADMIN API
+	adminSuffix = '/fmi/admin/api/v2/server/metadata'
+	check_endpoint_status ('Admin API (internal)', internAddr, adminEndpoint)
+	adminSuffix = '/fmi/admin/api/v2/server/metadata'
+	adminIntern = internPrefix + ':16001' + adminSuffix
+	adminExtern = externPrefix + adminSuffix
+	# ADMIN CONSOLE
+	facSuffix = '/admin-console'
+	facIntern = internPrefix + ':16001' + facSuffix
+	facExtern = externPrefix + facSuffix
+	# DATA API
+	dapiSuffix = '/fmi/data/vLatest/productInfo'
+	dapiIntern = internPrefix + dapiSuffix
+	dapiExtern = externPrefix + dapiSuffix
+	# ODATA API
+	odataSuffix = '/fmi/odata/v4'
+	odataIntern = internPrefix + ':3000' + odataSuffix
+	odataExtern = externPrefix + odataSuffix
+	
+	
+	# alternate: curl -vk -X DELETE https://127.0.0.1/fmi/admin/api/v2/user/auth/abcdef0123456789
 
 #
 #	c h e c k _ f i l e _ v a l i d i t y
@@ -688,6 +745,18 @@ def follow_file(some_file):
 						yield line + '\n'
 		except IOError:
 			yield ''
+
+def get_local_ip() -> str:
+	s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+	try:
+		# doesn't even have to be reachable
+		s.connect(('10.255.255.255', 1))
+		addr = s.getsockname()[0]
+	except:
+		addr = '127.0.0.1'
+	finally:
+		s.close()
+	return addr
 
 
 #
@@ -986,6 +1055,7 @@ def init_parser() -> argparse.ArgumentParser:
 		formatter_class=argparse.RawDescriptionHelpFormatter,
 		description='View FileMaker Server logs and set logging options.')
 
+	parser.add_argument('-A', '--api-test', dest='api_test', nargs=1, help='check connectivity of API endpoints')
 	parser.add_argument('-b', '--begin', nargs=1, help='start at first message on or after time or time interval')
 	parser.add_argument('-e', '--edit', nargs=1, help='open the log file using the command defined by $EDITOR')
 	parser.add_argument('-f', '--filter', nargs=1, help='only return lines matching regex expression')
@@ -1561,6 +1631,10 @@ def main():
 	#init_curses()
 
 	while True:
+		if args.api_test:
+			check_connectivity()
+			ignorePositionals = True
+		
 		if args.lognames:
 			print_log_names()
 			ignorePositionals = True
