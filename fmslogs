@@ -8,7 +8,7 @@ Version: 0.23, 2025-12-09
 Purpose: Display FileMaker Server logs and change logging options.
 """
 
-import argparse, curses, datetime, glob, linecache, os, pathlib, platform, re, socket, subprocess, sys, textwrap, time, http.client, ssl
+import argparse, curses, datetime, glob, linecache, os, pathlib, platform, re, socket, subprocess, socket, sys, textwrap, time, http.client, ssl
 from collections import OrderedDict
 from enum import Enum
 from contextlib import ExitStack
@@ -542,54 +542,117 @@ def calc_row_metrics (numLogs, logLinesCountVal) -> tuple:
 		
 	return (numMode,linesPerLog,screenLinesCount)
 
-def check_endpoint_status (name: str, host: str, endpoint: str, expectedStatus: int, port=80, useSSL=false) -> bool:
+
+#
+#	c h e c k _ e n d p o i n t _ s t a t u s
+#
+
+def check_endpoint_status (name: str, host: str, endpoint: str, expectedStatus: int, method='GET', port=80, useSSL=False) -> bool:
 	"""
 	Check for expected status result for the given endpoint.
 	"""
 	resultFlag = False
 	print ('Checking', name, end='')
-	conn = http.client.HTTPConnection(internAddr, port, timeout=5)
+	if useSSL:
+		conn = http.client.HTTPSConnection (host, port, context=ssl._create_unverified_context(), timeout=5)
+	else:
+		conn = http.client.HTTPConnection (host, port, timeout=5)
 	try:
-		conn.request("POST", endpoint)
+		conn.request(method, endpoint)
 		response = conn.getresponse()
-		if response.status == expectedStatus:
-			print (': Responding')
+		if response.status in (200,202) or response.status == expectedStatus:
+			# In some cases we get a 200 or similar, but there is an error in the XML.
+			body = response.read(500).decode('utf-8')
+			if body.startswith ('<?xml '):
+				match = re.search('<error code="(\d+)', body)
+				if match:
+					if int (match.group(1)) == expectedStatus:
+						print (': Responding')
+					else:
+						print (': Error %s' % match.group(1))
+				else:
+					print (': Error, Result Missing')
+			else:
+				print (': Responding')
+			resultFlag = True
 		else:
-			print (': ', response.reason)
+			print (':', response.reason)
 	except http.client.HTTPException as e:
-		print (': ', e)
+		print (':', e)
 	except Exception as e:
-		print (': ', e)
+		print (':', e)
 	finally:
 		conn.close()
+	return resultFlag
+
+
+def check_tcp_status (name: str, host: str, port):
+	"""
+	Print the result of testing if TCP connection can be opened to the given host's port.
+	"""
+	resultFlag = False
+	print ('Checking', name, end='')
+	
+	try:
+		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		sock.settimeout(5)	# 5 seconds
+		result = sock.connect_ex((host,port))
+		if result == 0:
+			print (': Responding')
+		else:
+			print (': Error %i, Could not open port %i' % (result, port))
+	except socket.gaierror:
+		print (': Could not resolve host "%s"' % host)
+	finally:
+		sock.close()
+
 
 def check_connectivity() -> str:
 	"""
 	Check both internal and external interfaces for a response from the DAPI endpoint.
 	"""
-		
+	
 	internAddr = '127.0.0.1'
 	externAddr = get_local_ip()
-	internPrefix = 'http://' + internAddr
-	externPrefix = 'https://' + externAddr
+	print ('CHECKING CONNECTIVITY')
+	print ('Internal Interface:', internAddr)
+	print ('External Interface:', externAddr)
+	print ()
+	# FMP/FMGO CLIENT
+	check_tcp_status ('FMP Client - Internal', internAddr, 5003)
+	check_tcp_status ('FMP Client - External', externAddr, 5003)
 	# ADMIN API
-	adminSuffix = '/fmi/admin/api/v2/server/metadata'
-	check_endpoint_status ('Admin API (internal)', internAddr, adminEndpoint)
-	adminSuffix = '/fmi/admin/api/v2/server/metadata'
-	adminIntern = internPrefix + ':16001' + adminSuffix
-	adminExtern = externPrefix + adminSuffix
+	adminEndpoint = '/fmi/admin/api/v2/server/metadata'
+	check_endpoint_status ('Admin API - Internal', internAddr, adminEndpoint, 400, method='POST', port=16001)
+	check_endpoint_status ('Admin API - External', externAddr, adminEndpoint, 400, method='POST', port=443, useSSL=True)
 	# ADMIN CONSOLE
-	facSuffix = '/admin-console'
-	facIntern = internPrefix + ':16001' + facSuffix
-	facExtern = externPrefix + facSuffix
+	facEndpoint = '/admin-console/signin'
+	check_endpoint_status ('Admin Console - Internal', internAddr, facEndpoint, 200, port=16001)
+	check_endpoint_status ('Admin Console - External', externAddr, facEndpoint, 200, port=443, useSSL=True)
+	# ADMIN CONSOLE - WORKER
+	facEndpoint = '/admin-console/signin'
+	check_endpoint_status ('Admin Console - Worker - Internal', internAddr, facEndpoint, 200, port=16003)
+	# CATALINA/CWP
+	xmlEndpoint = '/fmi/xml'
+	check_endpoint_status ('CWP - XML - Internal', internAddr, xmlEndpoint, 954, port=16021)
+	check_endpoint_status ('CWP - XML - External', externAddr, xmlEndpoint, 954, port=443, useSSL=True)
+
 	# DATA API
-	dapiSuffix = '/fmi/data/vLatest/productInfo'
-	dapiIntern = internPrefix + dapiSuffix
-	dapiExtern = externPrefix + dapiSuffix
+	dapiEndpoint = '/fmi/data/vLatest/productInfo'
+	check_endpoint_status ('Data API - Internal', internAddr, dapiEndpoint, 200, port=3000)
+	check_endpoint_status ('Data API - External', externAddr, dapiEndpoint, 200, port=443, useSSL=True)
+	# JDBC
+	check_tcp_status ('JDBC - Internal', internAddr, 2399)
+	check_tcp_status ('JDBC - External', externAddr, 2399)
 	# ODATA API
-	odataSuffix = '/fmi/odata/v4'
-	odataIntern = internPrefix + ':3000' + odataSuffix
-	odataExtern = externPrefix + odataSuffix
+	odataEndpoint = '/fmi/odata/v4'
+	check_endpoint_status ('OData API - Internal', internAddr, odataEndpoint, 401, port=3001)
+	check_endpoint_status ('OData API - External', externAddr, odataEndpoint, 401, port=443, useSSL=True)
+
+	# docws/fmws handler
+	xmlEndpoint = '/fmws'
+	check_endpoint_status ('CWP - XML - Internal', internAddr, xmlEndpoint, 954, port=1895)
+	check_endpoint_status ('CWP - XML - External', externAddr, xmlEndpoint, 954, port=443, useSSL=True)
 	
 	
 	# alternate: curl -vk -X DELETE https://127.0.0.1/fmi/admin/api/v2/user/auth/abcdef0123456789
@@ -1055,8 +1118,8 @@ def init_parser() -> argparse.ArgumentParser:
 		formatter_class=argparse.RawDescriptionHelpFormatter,
 		description='View FileMaker Server logs and set logging options.')
 
-	parser.add_argument('-A', '--api-test', dest='api_test', nargs=1, help='check connectivity of API endpoints')
 	parser.add_argument('-b', '--begin', nargs=1, help='start at first message on or after time or time interval')
+	parser.add_argument('-c', '--check-connectivity', dest='check_connectivity', action='store_true', help='check connectivity of API endpoints')
 	parser.add_argument('-e', '--edit', nargs=1, help='open the log file using the command defined by $EDITOR')
 	parser.add_argument('-f', '--filter', nargs=1, help='only return lines matching regex expression')
 	parser.add_argument('-h', '--head', action='store_true', help='display the first lines of log files')
@@ -1631,7 +1694,7 @@ def main():
 	#init_curses()
 
 	while True:
-		if args.api_test:
+		if args.check_connectivity:
 			check_connectivity()
 			ignorePositionals = True
 		
