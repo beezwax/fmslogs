@@ -537,8 +537,8 @@ def calc_row_metrics (numLogs, logLinesCountVal) -> tuple:
 		try:
 			linesPerLog = int (logLinesCountVal)
 		except ValueError:
-			print ("Error: invalid number for number parameter")
-			return (-1,-1)
+			print ('Error: invalid value of "%s" for number parameter' % logLinesCountVal)
+			return (-1,-1,-1)
 		
 	return (numMode,linesPerLog,screenLinesCount)
 
@@ -1822,7 +1822,7 @@ def main():
 		
 		linesPrinted = 0;
 		lastLog = args.logs[-1]
-
+				
 		numMode,linesPerLog,screenLinesCounter = calc_row_metrics (numLogsToPrint, args.number[0])
 		if linesPerLog < 1: break
 
