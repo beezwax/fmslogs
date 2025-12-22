@@ -639,8 +639,6 @@ def check_connectivity() -> str:
 	internAddr = '127.0.0.1'
 	externAddr = get_local_ip()
 	print ()
-	print ('CHECKING CONNECTIVITY')
-	print ()
 	print ('Internal Interface:', internAddr)
 	print ('External Interface:', externAddr)
 	print ()
@@ -699,6 +697,7 @@ def check_connectivity() -> str:
 	check_endpoint_status ('WebDirect - External', externAddr, webdEndpoint, 200, port=443, useSSL=True)
 
 	# alternate: curl -vk -X DELETE https://127.0.0.1/fmi/admin/api/v2/user/auth/abcdef0123456789
+	print ()
 
 #
 #	c h e c k _ f i l e _ v a l i d i t y

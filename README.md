@@ -80,6 +80,10 @@ Start printing logs on or after the given duration. Durations are an optional nu
 - 'h': hours from now
 - 'd': days since midnight today (e.g., '2d' would be from midnight yesterday)
 
+### -c, --check-connectivity
+Verify basic connectivity to various server components, and display SSL TLS version and hostnames. Where possible, both internal and external interfaces are checked, since
+external connections are routed via a reverse proxy through the web server. Also see the related -N/--network option.
+
 ### -e, --edit
 Opens a log file in an editor. If the standard shell environment variable $EDITOR is set for the user, the file will be opened using that command.
 
