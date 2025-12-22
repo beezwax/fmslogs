@@ -564,7 +564,7 @@ def check_endpoint_status (name: str, host: str, endpoint: str, expectedStatus: 
 			# In some cases we get a 200 or similar, but there is an error in the XML.
 			body = response.read(500).decode('utf-8')
 			if body.startswith ('<?xml '):
-				match = re.search('<error code="(\d+)', body)
+				match = re.search(r'<error code="(\d+)', body)
 				if match:
 					if int (match.group(1)) == expectedStatus:
 						print (': Responding')
@@ -585,7 +585,31 @@ def check_endpoint_status (name: str, host: str, endpoint: str, expectedStatus: 
 		conn.close()
 	return resultFlag
 
+def print_ssl_options (name: str, host: str, port=443) -> bool:
+	from cryptography import x509
+	from cryptography.hazmat.backends import default_backend
+	returnFlag = False
+	#context = ssl._create_unverified_context()
+	context =  ssl.create_default_context()
+	context.check_hostname = False
+	context.verify_mode = ssl.CERT_NONE
+	try:
+		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		ssock = context.wrap_socket(sock, server_hostname=host)
+		conn = ssock.connect ((host, port))
+		returnFlag = True
+		print('   Security Protocol:', ssock.version())
+		cert_der = ssock.getpeercert(binary_form=True)
+		cert = x509.load_der_x509_certificate(cert_der, default_backend())
+		print ('  ', cert)
+	except ssl.SSLError as e:
+		print ('  ', e)
+	finally:
+		sock.close()
+	
+	return returnFlag
 
+        
 def check_tcp_status (name: str, host: str, port):
 	"""
 	Print the result of testing if TCP connection can be opened to the given host's port.
@@ -614,47 +638,66 @@ def check_connectivity() -> str:
 	
 	internAddr = '127.0.0.1'
 	externAddr = get_local_ip()
+	print ()
 	print ('CHECKING CONNECTIVITY')
+	print ()
 	print ('Internal Interface:', internAddr)
 	print ('External Interface:', externAddr)
 	print ()
+	print ('Web SSL Usage')
+	print_ssl_options ('External Web', externAddr)
+	print ()
+	
 	# FMP/FMGO CLIENT
 	check_tcp_status ('FMP Client - Internal', internAddr, 5003)
 	check_tcp_status ('FMP Client - External', externAddr, 5003)
+	
 	# ADMIN API
 	adminEndpoint = '/fmi/admin/api/v2/server/metadata'
 	check_endpoint_status ('Admin API - Internal', internAddr, adminEndpoint, 400, method='POST', port=16001)
 	check_endpoint_status ('Admin API - External', externAddr, adminEndpoint, 400, method='POST', port=443, useSSL=True)
+	
 	# ADMIN CONSOLE
 	facEndpoint = '/admin-console/signin'
 	check_endpoint_status ('Admin Console - Internal', internAddr, facEndpoint, 200, port=16001)
 	check_endpoint_status ('Admin Console - External', externAddr, facEndpoint, 200, port=443, useSSL=True)
+	
 	# ADMIN CONSOLE - WORKER
 	facEndpoint = '/admin-console/signin'
 	check_endpoint_status ('Admin Console - Worker - Internal', internAddr, facEndpoint, 200, port=16003)
+	
 	# CATALINA/CWP
+	check_tcp_status ('CWP - Port 9889', internAddr, 9889)
 	xmlEndpoint = '/fmi/xml'
 	check_endpoint_status ('CWP - XML - Internal', internAddr, xmlEndpoint, 954, port=16021)
 	check_endpoint_status ('CWP - XML - External', externAddr, xmlEndpoint, 954, port=443, useSSL=True)
+	check_endpoint_status ('CWP - wpem - Internal', internAddr, 'fmswpem/', 400, port=16002)
+	check_endpoint_status ('CWP - wpem - External', externAddr, '/fmi/mwpem/', 400, port=443, useSSL=True)
 
 	# DATA API
 	dapiEndpoint = '/fmi/data/vLatest/productInfo'
 	check_endpoint_status ('Data API - Internal', internAddr, dapiEndpoint, 200, port=3000)
 	check_endpoint_status ('Data API - External', externAddr, dapiEndpoint, 200, port=443, useSSL=True)
+	
 	# JDBC
 	check_tcp_status ('JDBC - Internal', internAddr, 2399)
 	check_tcp_status ('JDBC - External', externAddr, 2399)
+	
 	# ODATA API
 	odataEndpoint = '/fmi/odata/v4'
 	check_endpoint_status ('OData API - Internal', internAddr, odataEndpoint, 401, port=3001)
 	check_endpoint_status ('OData API - External', externAddr, odataEndpoint, 401, port=443, useSSL=True)
 
 	# docws/fmws handler
-	xmlEndpoint = '/fmws'
+	xmlEndpoint = '/fmws/serverinfo'
 	check_endpoint_status ('CWP - XML - Internal', internAddr, xmlEndpoint, 954, port=1895)
-	check_endpoint_status ('CWP - XML - External', externAddr, xmlEndpoint, 954, port=443, useSSL=True)
-	
-	
+	check_endpoint_status ('CWP - XML - External', externAddr, xmlEndpoint, 954, port=443, useSSL=True)	# this may get removed
+
+	# WEBD
+	webdEndpoint = '/fmi/webd/'
+	check_endpoint_status ('WebDirect - Internal', internAddr, webdEndpoint, 200, port=16021)
+	check_endpoint_status ('WebDirect - External', externAddr, webdEndpoint, 200, port=443, useSSL=True)
+
 	# alternate: curl -vk -X DELETE https://127.0.0.1/fmi/admin/api/v2/user/auth/abcdef0123456789
 
 #
