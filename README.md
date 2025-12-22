@@ -52,22 +52,23 @@ positional arguments (log name):
   {access,admin,clientstats,dapi,event,fac,fmodatadebug,fmsadmindebug,fmsasedebug,fmscwpc,fmscwpcli,fmsdebug,fmsgetpasskeyebug,fmshdebug,fmshelper,fmslogdebug,fmwipd,httpaccess,httpdctlerr,httpdctlout,httperror,httpsslaccess,httpsslerror,install,httpaccess,loadschedules,odata,scriptevent,stats,stderr,stdout,topcall,trimlog,wpe,wpedebug,interval,clientstats,fmsdebug,logsize,topcall}
 
 options:
-  -b, --begin BEGIN     start at first message on or after time or time interval in BEGIN
-  -e, --edit            open the log in a text editor; first try $EDITOR, then GUI editor (macOS), then nano
-  -f, --filter FILTER   only return lines matching regex expression FILTER
-  -h, --head            display the start of the specified log files instead of its tail
-  --help                display command details
-  -H, --headers-off     turn off headers for all logs
-  -l, --list            list all log files, including size, date created & modified, sorted by modification time
-  -L, --lognames        list log names supported by command
-  -n, --number RANGE    quantity of lines to print
-  -N, --network         Network usage info
-  -S, --set SET         change log configuration option
-  -s, --succinct        strip less useful details from log output (partially implemented)
-  --ssh SSH             use the connection string to fetch logs from remote server
-  -t, --tail            wait for any new messages after printing current end of log
-  --truncate            cut off any output if beyond width of screen
-  -V, --version         version info for fmslogs and FMS components
+  -b, --begin BEGIN         start at first message on or after time or time interval in BEGIN
+  -c, --check-connectivity	test connectivity to FMS components
+  -e, --edit                open the log in a text editor; first try $EDITOR, then GUI editor (macOS), then nano
+  -f, --filter FILTER       only return lines matching regex expression FILTER
+  -h, --head                display the start of the specified log files instead of its tail
+  --help                    display command details
+  -H, --headers-off         turn off headers for all logs
+  -l, --list                list all log files, including size, date created & modified, sorted by modification time
+  -L, --lognames            list log names supported by command
+  -n, --number RANGE        quantity of lines to print
+  -N, --network             network usage info
+  -S, --set SET             change log configuration option
+  -s, --succinct            strip less useful details from log output (partially implemented)
+  --ssh SSH                 use the connection string to fetch logs from remote server
+  -t, --tail                wait for any new messages after printing current end of log
+  --truncate                cut off any output if beyond width of screen
+  -V, --version             version info for fmslogs and FMS components
 ```
 
 ---
