@@ -1365,10 +1365,13 @@ def print_log (logName: str, count: int):
 #
 
 def print_log_names():
-	"""Print out log names as used by command with their expected paths."""
+	"""Print out log names used with their expected paths."""
 	print ('LOG NAME                PATH')
 	for log in LOG_CHOICES:
-		print('{:22}  {:<40}'.format (log, get_log_path (log)))
+		logPath = get_log_path (log)
+		if logPath == None: logPath = '---'
+		print('{:22}  {:<40}'.format (log, logPath))
+
 
 #
 #	p r i n t _ l o g _ i n f o
