@@ -405,10 +405,10 @@ LOG_SPECS_LINUX = {
 LOG_SPECS_APACHE = {
 	'httpaccess': {
 		'path': 'HTTPServer/logs/access_log.*',
-		'lghd': False,
+		'lghd': True,
 		#        [04/Nov/2025:09:48:53 -0800] 127.0.0.1 TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256 "GET /fmi/mwpew/wpe/prefs HTTP/1.1" 384
-		'head': 'TIMESTAMP                    HOST      VERSION CIPHER                      OP   PATH',
-		'tbst': 8
+		'head': 'REQUESTER        STATUS  LENGTH  IDENTITY      USER          TIMESTAMP                   MESSAGE',
+		'tbst': [              17,     25,   33,             47,           61,                          89]
 	},
 	'httpdctlerr': {
 		'path': 'HTTPServer/logs/httpdctl.err',
@@ -433,10 +433,10 @@ LOG_SPECS_APACHE = {
 	},
 	'httpsslaccess': {
 		'path': 'HTTPServer/logs/ssl_access_log.*',
-		'lghd': False,
+		'lghd': True,
 		#        [04/Nov/2025:09:48:53 -0800] 127.0.0.1 TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256 "GET /fmi/mwpew/wpe/prefs HTTP/1.1" 384
-		'head': 'TIMESTAMP                    HOST      VERSION CIPHER                      OP   PATH',
-		'tbst': 8
+		'head': 'REQUESTER        STATUS  LENGTH  IDENTITY      USER          TIMESTAMP                   MESSAGE',
+		'tbst': [              17,     25,   33,             47,           61,                          89]
 	},
 	'httpsslerror': {
 		'path': 'HTTPServer/logs/ssl_error_log.*',
@@ -449,8 +449,8 @@ LOG_SPECS_APACHE = {
 		'path': 'HTTPServer/logs/ssl_request_log.*',
 		'lghd': False,
 		#        [04/Nov/2025:09:48:53 -0800] 127.0.0.1 TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256 "GET /fmi/mwpew/wpe/prefs HTTP/1.1" 384
-		'head': 'TIMESTAMP                    HOST      VERSION CIPHER                      OP   PATH',
-		'tbst': 8
+		'head': 'TIMESTAMP                    HOST             VERSION  CIPHER                        OP   PATH',
+		'tbst': [                          29,              46,      55,                           85,                      99]
 	}
 }
 
@@ -585,6 +585,10 @@ def check_endpoint_status (name: str, host: str, endpoint: str, expectedStatus: 
 		conn.close()
 	return resultFlag
 
+#
+#	p r i n t _ s s l _ o p t i o n s
+#
+
 def print_ssl_options (name: str, host: str, port=443) -> bool:
 	from cryptography import x509
 	from cryptography.hazmat.backends import default_backend
@@ -630,6 +634,10 @@ def check_tcp_status (name: str, host: str, port):
 	finally:
 		sock.close()
 
+
+#
+#	c h e c k _ c o n n e c t i v i t y
+#
 
 def check_connectivity() -> str:
 	"""
@@ -698,6 +706,7 @@ def check_connectivity() -> str:
 
 	# alternate: curl -vk -X DELETE https://127.0.0.1/fmi/admin/api/v2/user/auth/abcdef0123456789
 	print ()
+
 
 #
 #	c h e c k _ f i l e _ v a l i d i t y
@@ -779,14 +788,25 @@ def expand_tabs_for_line (logName: str, line: str) -> str:
 	except KeyError:
 		tabstops = 8
 	
-	if logName in ['admin','adminapi']:
-		# This log doesn't use tabs, but instead uses 2 or 3 spaces to separate columns.
-		respace = re.compile (r"  +")
-		line = respace.sub ('\t', line)
-	
 	if isinstance(tabstops, int):
+		# All tab stops are the same size.
 		return line.expandtabs(tabstops)
 
+	if logName in ['admin','adminapi']:
+		# This log doesn't use tabs, but instead uses 2 or 3 spaces to separate columns.
+		respace = re.compile (r'  +')
+		line = respace.sub ('\t', line)
+	
+	if logName in ['httpaccess','httpsslaccess']:
+		#                 host   iden user  time    zone  requ  stat  size
+		match = re.match (r'(.*) (.*) (.*) \[(.*) (.*)\] "(.*)" (\d*) (\d*)', line)
+		line = match.group(1) + '\t' + match.group(7) + '\t' + match.group(8) + '\t' + match.group(2) + '\t' + match.group(3) + '\t' + match.group(4) + ' ' + match.group(5) + '\t' + match.group(6) + '\n'
+	
+	if logName in ['httpsslrequest']:
+		#                   timest zone   host vers ciph oppath len
+		match = re.match (r'\[(.*) (.*)\] (.*) (.*) (.*) "(.*)" (\d*)', line)
+		line = match.group (1) + ' ' + match.group(2) + '\t' + match.group(3) + '\t' + match.group(4) + '\t' + match.group(5) + '\t' + match.group(6) + '\n'
+	
 	result = []
 
 	parts = line.split('\t')
@@ -804,7 +824,7 @@ def expand_tabs_for_line (logName: str, line: str) -> str:
 				col = next_tab
 				next_tab = next(tab_iter, None)
 			else:
-				result.append('++')	# pad two spaces if no stop specified
+				result.append('  ')	# pad two spaces if no stop specified
 				col += 1
 	
 	if TRUNCATE_MODE:
@@ -1442,7 +1462,7 @@ def print_log_header (logName:str, succinct: bool) -> int:
 def print_file_head_faster (filePath: str, lines: int) -> bool:
 
 	"""Print up to the given number of lines of text from the start of the file at the provided path.
-	If MAX_READ_LEN is reached, stop output and append a '+++'.
+	If MAX_READ_LEN is reached, stop output and append a '+'.
 	Result is False if there was an error opening or reading the file."""
 
 	result = False
