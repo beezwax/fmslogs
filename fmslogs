@@ -4,7 +4,7 @@
 """
 Filename: fmslogs.py
 Author: Simon Brown on 10/15/2025
-Version: 0.24, 2025-12-19
+Version: 0.25, 2025-12-23
 Purpose: Display FileMaker Server logs and change logging options.
 """
 
@@ -33,7 +33,7 @@ fmslogs -s topcall 1 # enable TopCall.log
 open either directory or log file in text editor, eg $EDITOR
 """
 
-VERSION = "0.24 - 2025-12-19"
+VERSION = "0.25 - 2025-12-23"
 TIMESTAMP_START = None
 FILTER_REGEX = None
 TEXTWRAP = textwrap.TextWrapper(width=120,tabsize=10)
@@ -1693,17 +1693,34 @@ def print_version():
 		fmsOutLines = subprocess.run(['/usr/sbin/pkgutil', '--pkg-info','com.filemaker.fms.worker.pkg'], capture_output=True, text=True).stdout.split('\n')
 		print ('FMS:',fmsOutLines[1].split(': ')[1])
 		
-	if platform.system() == 'Linux':
+	elif platform.system() == 'Linux':
 		fmsOutLines = subprocess.run(['/usr/bin/apt-cache', 'policy', 'filemaker-server'], capture_output=True, text=True).stdout.split('\n')
 		print ('FMS:',fmsOutLines[1].split(': ')[1])
-
+	
+	# JAVA
+	try:
+		if platform.system() == 'Darwin':
+			javaWords = subprocess.run([BASE_PATH + '/Web Publishing/java/bin/java', '-version'], capture_output=True, text=True).stderr.split('"')
+			print ('Java:', javaWords[1])
+		elif platform.system() == 'Linux':
+			javaWords = subprocess.run(['/usr/bin/java', '-version'], capture_output=True, text=True).stderr.split('"')
+			print ('Java:', javaWords[1])
+	except FileNotFoundError:
+		print ('Java: <missing>')
+	
+	# NODE.JS
+	
+	if platform.system() in ['Darwin', 'Linux']:
+		nodeVersion = subprocess.run([BASE_PATH + '/node/bin/node', '-v'], capture_output=True, text=True).stdout[1:]
+		print ('Node:', nodeVersion, end='')
+	
 	# OPENSSL
 	
 	if platform.system() == 'Darwin':
-		openSSLWords = subprocess.run(['/Library/FileMaker Server/Database Server/bin/openssl', 'version'], capture_output=True, text=True).stdout.split()
+		openSSLWords = subprocess.run([BASE_PATH + '/Database Server/bin/openssl', 'version'], capture_output=True, text=True).stdout.split()
 		print ('OpenSSL:',openSSLWords[1],openSSLWords[2])
 	
-	if platform.system() == 'Linux':
+	elif platform.system() == 'Linux':
 		openSSLWords = subprocess.run(['/usr/bin/openssl', 'version'], capture_output=True, text=True).stdout.split()
 		print ('OpenSSL:',openSSLWords[1],openSSLWords[2])
 	
@@ -1739,6 +1756,16 @@ def print_version():
 	if platform.system() == 'Windows':
 		print ('IIS: ')
 	
+	# VAADIN
+	vaadinLibServerPath = BASE_PATH + '/Web Publishing/publishing-engine/jwpc-tomcat/fmi/WEB-INF/lib/vaadin-server-*.fmi.jar'
+	pathList = glob.glob (vaadinLibServerPath)
+	if pathList != []:
+		match = re.search (r'server-(\d*\.\d*\.\d*)', pathList[0])
+		vaadinStr = match.group(1)
+	else:
+		vaadinStr = '<missing>'
+			
+	print ('Vaadin:', vaadinStr)
 	print ()
 
 
