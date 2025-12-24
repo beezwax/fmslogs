@@ -44,6 +44,26 @@ Current functionality with major issues:
  
 ---
 
+## INSTALLATION
+
+### macOS
+
+Copy the `fmslog` file to a directory in user's command PATH:
+	`cd /tmp`
+	`curl -o fmslogs.zip https://codeload.github.com/beezwax/fmslogs/zip/refs/heads/main`
+	`unzip fmslogs.zip`
+	`sudo cp fmslogs-main/fmslogs /usr/local/bin`
+
+### Ubuntu
+
+Copy the `fmslog` file to a directory in user's command PATH:
+	`cd /tmp`
+	`curl -o fmslogs.zip https://codeload.github.com/beezwax/fmslogs/zip/refs/heads/main`
+	`unzip fmslogs.zip`
+	`sudo cp fmslogs-master/fmslogs /usr/bin`
+
+---
+
 ```
 usage: fmslogs [-b BEGIN] [-e EDIT] [-f FILTER] [-h] [-H] [--help] [-l] [-L] [-m] [-n NUMBER] [-p PASSWORD] [-S SET] [-s] [--ssh SSH] [-t] [--tail TAIL] [--truncate] [-u USER] [-N] [-v] [logs ...]
                [logname]
