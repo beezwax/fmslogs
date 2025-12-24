@@ -161,7 +161,7 @@ LOG_SPECS_BASE = {
 		#        ----------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
 		#			2025-08-27 11:08:10.055 -0700  4101   ERROR	250.130.228.236  some-user-name   POST  Script Error -- Script File: 'filename', Script Name: 'create update topic [PSoS]', Script Step: 'Set Field By Name'  0
 		# Size at end (re-arrange columns?). Rarely a 4 digit error code.
-		'head': 'TIMESTAMP	                   CODE   LEVEL   HOST            USER             HTTP  MESSAGE  SIZE',
+		'head': 'TIMESTAMP	                CODE   LEVEL   HOST            USER              HTTP  MESSAGE  SIZE',
 		'tbst': [32,39,47,63,81,87],
 		#			2025-08-27 11:08:10.055  301   ERROR  some-user-name   POST  Script Error -- Script File: 'Tool', Script Name: 'create update topic [PSoS]', Script Step: 'Set Field By Name'  0
 		'shed': 'TIMESTAMP	             CODE  LEVEL  USER             HTTP  MESSAGE  SIZE',

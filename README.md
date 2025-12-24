@@ -1,5 +1,5 @@
 # fmslogs
-## Display and configure FileMaker Server logs
+## Display FileMaker Server logs & processes
 
 
 Some things that it does that using just tail, head, or Get-Content don't:
@@ -7,8 +7,10 @@ Some things that it does that using just tail, head, or Get-Content don't:
 - uses custom tab stops for each log for consistent column alignments
 - quick access to print or open in editor (don't have to type full log path or cd to correct directory)
 - limit messages to those only after a given timestamp or duration
-- lists size and modification dates for all logs
+- lists path, size, and modification dates for all logs
 - optionally truncate lines to avoid line wrap
+- network ports in use
+- connectivity tests for 10 different FMS endpoints
 
 Design Goals:
 - no dependencies other than the core Python libraries, and requiring just one file to be copied onto server
@@ -35,10 +37,10 @@ Current functionality with major issues:
 - `-b` or `--begin`: only working with durations (eg, 'd' or '1d' for 1 day)
 - `-m` or `--merge`: not working
 - `-S` or `--set`: not working
-- `-s` or `--succinct`: not working
-- `--ssh`: not working
-- `-t` or `--tail`: does not print current log segment before starting to follow
-- not including nginx/apache/IIS logs
+- `-s` or `--succinct`: partially implemented
+- `--ssh`: not implmented
+- `-t` or `--tail`: does not print current log segment before starting to follow/tail
+- nginx/apache/IIS: not fully implemented
  
 ---
 
