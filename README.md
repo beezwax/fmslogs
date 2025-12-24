@@ -4,7 +4,7 @@
 
 Some things that it does that using just tail, head, or Get-Content don't:
 - displays headers for columns, even if not showing first row
-- uses custom tab stops for each log for consistent column alignments
+- improved formatting, including consistent column alignments
 - quick access to print or open in editor (don't have to type full log path or cd to correct directory)
 - limit messages to those only after a given timestamp or duration
 - lists path, size, and modification dates for all logs
