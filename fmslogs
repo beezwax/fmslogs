@@ -1757,7 +1757,8 @@ def print_version():
 		print ('IIS: ')
 	
 	# VAADIN
-	vaadinLibServerPath = BASE_PATH + '/Web Publishing/publishing-engine/jwpc-tomcat/fmi/WEB-INF/lib/vaadin-server-*.fmi.jar'
+	# Only match server-# so that -gae or -mpr is not included. 
+	vaadinLibServerPath = BASE_PATH + '/Web Publishing/publishing-engine/jwpc-tomcat/fmi/WEB-INF/lib/vaadin-server-[1-9]*.fmi.jar'
 	pathList = glob.glob (vaadinLibServerPath)
 	if pathList != []:
 		match = re.search (r'server-(\d*\.\d*\.\d*)', pathList[0])

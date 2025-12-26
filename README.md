@@ -64,6 +64,8 @@ Copy the `fmslog` file to a directory in user's command PATH:
 
 ---
 
+## OPTIONS & PARAMETERS
+
 ```
 usage: fmslogs [-b BEGIN] [-e EDIT] [-f FILTER] [-h] [-H] [--help] [-l] [-L] [-m] [-n NUMBER] [-p PASSWORD] [-S SET] [-s] [--ssh SSH] [-t] [--tail TAIL] [--truncate] [-u USER] [-N] [-v] [logs ...]
                [logname]
