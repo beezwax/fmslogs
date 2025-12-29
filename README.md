@@ -156,6 +156,6 @@ Print version of fmslogs command and FileMaker Server components.
 
 ---
 
-![alt log display](display_logs.png?raw=true)
+![alt](display_logs.png?raw=true "Display Logs")
 
-![alt connectivity tests](https://github.com/beezwax/fmslogs/blob/master/connectivity_check.png?raw=true)
+![alt](connectivity_check.png?raw=true "Connectivity Test")
