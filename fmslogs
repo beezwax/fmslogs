@@ -8,7 +8,7 @@ Version: 0.25, 2025-12-23
 Purpose: Display FileMaker Server logs and change logging options.
 """
 
-import argparse, curses, datetime, glob, linecache, os, pathlib, platform, re, socket, subprocess, socket, sys, textwrap, time, http.client, ssl
+import argparse, curses, datetime, glob, linecache, os, pathlib, platform, pprint, re, socket, subprocess, socket, sys, tempfile, textwrap, time, http.client, ssl
 from collections import OrderedDict
 from enum import Enum
 from contextlib import ExitStack
@@ -586,24 +586,117 @@ def check_endpoint_status (name: str, host: str, endpoint: str, expectedStatus: 
 	return resultFlag
 
 #
-#	p r i n t _ s s l _ o p t i o n s
+#	p r i n t _ c e r t i f i c a t e _ i n f o
 #
 
-def print_ssl_options (name: str, host: str, port=443) -> bool:
-	from cryptography import x509
-	from cryptography.hazmat.backends import default_backend
+def print_certificate_info (name: str, host: str, port=443) -> bool:
+	"""
+	Display the SSL certificate attributes used by host.
+	This uses an undocumented interface, as all Python alternatives
+	to extract SSL info require additional modules to be installed.
+	https://github.com/python/cpython/blob/main/Lib/test/test_ssl.py
+	"""
+	
 	returnFlag = False
-	#context = ssl._create_unverified_context()
+	context =  ssl.create_default_context()
+	context.check_hostname = False
+	context.verify_mode = ssl.CERT_NONE
+	
+	#certFile = '/tmp/' + str(uuid.uuid4()) + '.pem'
+	certFile = tempfile.NamedTemporaryFile (mode='w', encoding='utf8', delete=False, delete_on_close=False)
+	certFilePath = certFile.name
+	#with open(certFile, 'w', encoding='utf8') as fp:
+	#	fp.write(ssl.get_server_certificate((myhostname, 443)))
+	try:
+		certFile.write(ssl.get_server_certificate((host, port)))
+	except ConnectionRefusedError:
+		print ('https://%s:%i not responding' % (host,port))
+		return False
+	except Exception as e:
+		print (':', e)
+		return False
+	finally:
+		certFile.close()
+	
+	try:
+		certDict = ssl._ssl._test_decode_cert(certFilePath)
+	except Exception as e:
+		print("Error decoding certificate: {:}".format(e))
+	else:
+		print ('Subject:')
+		print (' ',end='')
+		pprint.pprint (certDict ['subject'])
+		if 'subjectAltName' in certDict:
+			print (' ',end='')
+			pprint.pprint (certDict ['subjectAltName'], indent=2)
+		print ('Not Before:', certDict ['notBefore'])
+		print ('Not After:', certDict ['notAfter'])
+		if 'OCSP' in certDict:
+			print ('OCSP:', certDict ['OCSP'])
+		if 'caIssuers' in certDict:
+			print ('CA Issuers:', certDict ['caIssuers'])
+		print ('Serial Number:', certDict ['serialNumber'])		
+		print ('Issuer:')
+		pprint.pprint (certDict['issuer'], indent=1)
+		print ('Version:', certDict ['version'])		
+	
+	os.remove (certFilePath)
+	returnFlag = True
+
+	return returnFlag
+
+#
+#	p r i n t _ t l s _ v e r s i o n
+#
+
+def print_tls_version (host: str, port=443) -> bool:
+	"""
+	Create connection to server and print the TLS version that was used.
+	"""
+	
+	returnFlag = False
 	context =  ssl.create_default_context()
 	context.check_hostname = False
 	context.verify_mode = ssl.CERT_NONE
 	try:
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		sock.settimeout (5)
+		ssock = context.wrap_socket(sock, server_hostname=host)
+		conn = ssock.connect ((host, port))
+		returnFlag = True
+		print('SSL/TLS version:', ssock.version())
+	except ssl.SSLError as e:
+		print ('  ', e)
+	finally:
+		sock.close()
+	
+	return returnFlag
+
+
+#
+#	p r i n t _ s s l _ o p t i o n s_ c r y p t o
+#
+
+def print_ssl_options_crypto (name: str, host: str, port=443) -> bool:
+	
+	# Requires non-default module.
+	from cryptography import x509
+	from cryptography.hazmat.backends import default_backend
+	
+	returnFlag = False
+	context =  ssl.create_default_context()
+	context.check_hostname = False
+	context.verify_mode = ssl.CERT_NONE
+	try:
+		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		sock.settimeout (5)
 		ssock = context.wrap_socket(sock, server_hostname=host)
 		conn = ssock.connect ((host, port))
 		returnFlag = True
 		print('   Security Protocol:', ssock.version())
 		cert_der = ssock.getpeercert(binary_form=True)
+		print (type (cert_der))
+		print (cert_der,'\n')
 		cert = x509.load_der_x509_certificate(cert_der, default_backend())
 		print ('  ', cert)
 	except ssl.SSLError as e:
@@ -650,9 +743,11 @@ def check_connectivity() -> str:
 	print ('Internal Interface:', internAddr)
 	print ('External Interface:', externAddr)
 	print ()
-	print ('Web SSL Usage')
-	print_ssl_options ('External Web', externAddr)
+	print ('=== Web SSL Usage ===')
+	if print_certificate_info ('External Web', externAddr):
+		print_tls_version (externAddr, 443)
 	print ()
+	print ('=== Connectivity Tests ===')
 	
 	# FMP/FMGO CLIENT
 	check_tcp_status ('FMP Client - Internal', internAddr, 5003)
