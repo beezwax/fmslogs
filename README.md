@@ -1,7 +1,6 @@
 # fmslogs
 ## Display FileMaker Server logs & processes
 
-
 Some things that it does that using just tail, head, or Get-Content don't:
 - displays headers for columns, even if not showing first row
 - improved formatting, including consistent column alignments
@@ -154,3 +153,9 @@ Remove any output from the end of the line that would cause a line wrap for the 
 
 ### -V, --version
 Print version of fmslogs command and FileMaker Server components.
+
+---
+
+![alt text](https://github.com/beezwax/fmslogs/blob/master/display_logs.png ?raw=true)
+
+![alt text](https://github.com/beezwax/fmslogs/blob/master/connectivity_check.png ?raw=true)

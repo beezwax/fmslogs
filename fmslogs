@@ -4,7 +4,7 @@
 """
 Filename: fmslogs.py
 Author: Simon Brown on 10/15/2025
-Version: 0.25, 2025-12-23
+Version: 0.26, 2025-12-28
 Purpose: Display FileMaker Server logs and change logging options.
 """
 
@@ -33,7 +33,7 @@ fmslogs -s topcall 1 # enable TopCall.log
 open either directory or log file in text editor, eg $EDITOR
 """
 
-VERSION = "0.25 - 2025-12-23"
+VERSION = "0.26 - 2025-12-28"
 TIMESTAMP_START = None
 FILTER_REGEX = None
 TEXTWRAP = textwrap.TextWrapper(width=120,tabsize=10)
@@ -255,9 +255,9 @@ LOG_SPECS_BASE = {
 		'path': 'Logs/fmodata.log',
 		'lghd': True,
 		#        ---------1---------2---------3---------4---------5---------6---------7---------8---------9---------0---------
-		#		  '2025-10-14T13:01:31.232452-08:00  0     INFO   170.255.255.218  GET   /fmi/odata/v4	 75'
-		'head': 'TIMESTAMP                         CODE  LEVEL  HOST             OP    ENDPOINT  SIZE',
-		'tbst': [34,40,47,64,70],  # 'size' value will be padded on end
+		#		  '2025-10-14T13:01:31.232452-08:00  0     INFO   170.255.255.218   GET   /fmi/odata/v4	 75'
+		'head': 'TIMESTAMP                         CODE  LEVEL  HOST                 OP      ENDPOINT               SIZE',
+		'tbst': [34,40,47,66,68,76,99],  # 'size' value will be padded on end
 		#		  '2025-10-14T13:01:31.232452  0     INFO   GET   /fmi/odata/v4	 75'
 		'shed': 'TIMESTAMP                   CODE  LEVEL  OP    ENDPOINT  SIZE',
 		'shtb': [29,35,48]
