@@ -1829,8 +1829,8 @@ def print_version():
 		
 		try:
 			nginxOut = subprocess.run([nginxPath, '-v'], capture_output=True, text=True).stderr
-			# nginx version: nginx/1.28.0
-			nginxVers = nginxOut.split ('/')[1] 
+			# nginx version: nginx/1.28.0\n
+			nginxVers = nginxOut.split ('/')[1][:-1]
 		except FileNotFoundError:
 			nginxVers = 'not present'
 		
