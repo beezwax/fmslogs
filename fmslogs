@@ -8,7 +8,7 @@ Version: 0.26, 2025-12-28
 Purpose: Display FileMaker Server logs and change logging options.
 """
 
-import argparse, curses, datetime, glob, linecache, os, pathlib, platform, pprint, re, socket, subprocess, socket, sys, tempfile, textwrap, time, http.client, ssl
+import argparse, curses, datetime, glob, linecache, os, pathlib, platform, pprint, re, socket, subprocess, socket, sys, tempfile, textwrap, time, http.client, ssl, urllib.request
 from collections import OrderedDict
 from enum import Enum
 from contextlib import ExitStack
@@ -554,9 +554,9 @@ def check_endpoint_status (name: str, host: str, endpoint: str, expectedStatus: 
 	resultFlag = False
 	print ('Checking', name, end='')
 	if useSSL:
-		conn = http.client.HTTPSConnection (host, port, context=ssl._create_unverified_context(), timeout=5)
+		conn = http.client.HTTPSConnection (host, port, context=ssl._create_unverified_context(), timeout=4)
 	else:
-		conn = http.client.HTTPConnection (host, port, timeout=5)
+		conn = http.client.HTTPConnection (host, port, timeout=4)
 	try:
 		conn.request(method, endpoint)
 		response = conn.getresponse()
@@ -657,7 +657,7 @@ def print_tls_version (host: str, port=443) -> bool:
 	context.verify_mode = ssl.CERT_NONE
 	try:
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		sock.settimeout (5)
+		sock.settimeout (4)
 		ssock = context.wrap_socket(sock, server_hostname=host)
 		conn = ssock.connect ((host, port))
 		returnFlag = True
@@ -686,7 +686,7 @@ def print_ssl_options_crypto (name: str, host: str, port=443) -> bool:
 	context.verify_mode = ssl.CERT_NONE
 	try:
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		sock.settimeout (5)
+		sock.settimeout (4)
 		ssock = context.wrap_socket(sock, server_hostname=host)
 		conn = ssock.connect ((host, port))
 		returnFlag = True
@@ -713,7 +713,7 @@ def check_tcp_status (name: str, host: str, port):
 	
 	try:
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		sock.settimeout(5)	# 5 seconds
+		sock.settimeout(4)	# 4 seconds
 		result = sock.connect_ex((host,port))
 		if result == 0:
 			print (': Responding')
@@ -736,6 +736,7 @@ def check_connectivity() -> str:
 	
 	internAddr = '127.0.0.1'
 	externAddr = get_local_ip()
+
 	print ()
 	print ('Internal Interface:', internAddr)
 	print ('External Interface:', externAddr)
@@ -967,17 +968,40 @@ def follow_file(some_file):
 		except IOError:
 			yield ''
 
+#
+#	g e t _ l o c a l _ i p
+#
+
 def get_local_ip() -> str:
 	s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 	try:
+		s.settimeout (4)
 		# doesn't even have to be reachable
-		s.connect(('10.255.255.255', 1))
+		s.connect(('8.8.8.8', 1))
 		addr = s.getsockname()[0]
-	except:
+	except Exception as e:
+		print (e)
 		addr = '127.0.0.1'
 	finally:
 		s.close()
 	return addr
+
+#
+#	g e t _ n e t w o r k _ a d d r e s s
+#
+
+def get_network_address() -> str:
+	"""
+	Extract the last logged network addresses from FMS' Event.log.
+	Result may contain multiple space delimited addresses.
+	"""
+	
+	eventPath = get_log_path ('event')
+	match = scan_file_last_match (eventPath, r'Network address.*: (.*)')
+	if match == None:
+		return 'No matches in current Event.log'
+	else:
+		return match
 
 
 #
@@ -1687,6 +1711,18 @@ def print_net_status():
 		if line[0] == 'E':
 			print('{:16}  {:<4}  {:<15}'.format (line[1], line[2], line[3]))
 	
+	try:
+		response = urllib.request.urlopen('http://checkip.amazonaws.com', timeout=5)
+		gatewayIP = response.read().decode("utf-8")[:-1]
+	except urllib.error.URLError:
+		gatewayIP = 'Could not connect to checkip.amazonaws.com'
+	
+	print ()
+	print ('Internet Address:', gatewayIP)
+	print ('External Interface:', get_local_ip())
+	print ('FMS Network Address(es):', get_network_address())
+	print ()
+
 
 #
 #	p r i n t _ t a i l
@@ -1864,6 +1900,35 @@ def print_version():
 			
 	print ('Vaadin:', vaadinStr)
 	print ()
+
+
+#
+#   p r i n t _ h e a d
+#
+
+def scan_file_last_match (logPath: str, matchStr: str) -> str:
+	"""
+	Scan the file at given path, returning the result of last found matching pattern.
+	Returns None if no matches were found or the file is not readable.
+	"""
+	
+	try:
+		check_file_validity (logPath)
+	except FileCheckError as e:
+		return None
+	
+	line: str = None
+	lineNum: int = 1
+	lastMatch: str = None
+	
+	while True:
+		line = linecache.getline (logPath, lineNum)
+		if line == '': break
+		m = re.search (matchStr, line)
+		if m: lastMatch = m.group(1)
+		lineNum += 1
+			
+	return lastMatch
 
 
 #
