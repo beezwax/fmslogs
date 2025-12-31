@@ -87,7 +87,6 @@ options:
   --help                    display command details
   -H, --headers-off         turn off headers for all logs
   -l, --list                list all log files, including size, date created & modified, sorted by modification time
-  -L, --lognames            list log names supported by command
   -n, --number RANGE        quantity of lines to print
   -N, --network             network usage info
   -S, --set SET             change log configuration option
@@ -132,10 +131,7 @@ Disable the printing of any log column headers the command may use, and don't sk
 Normally, unless tailing a log or printing a log that does not have any fixed columns, the command includes its own column header as the first line for each log.
 
 ### -l, --list
-List all log names, and for those where a log file is found, list their creation and modification timestamps and their size.
-
-### -L, --lognames
-List all log names known by the command for the current platform, followed by their full paths.
+List all log names and paths for the current platform. For those where a log file is present, list their creation and modification timestamps and their size.
 
 ### -n, --number
 Number of log message lines or screens to print. For screens, add 's' as a suffix, e.g. '-n 2s' for two screens. Since some messages may not fit current screen size

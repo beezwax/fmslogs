@@ -1308,7 +1308,6 @@ def init_parser() -> argparse.ArgumentParser:
 	parser.add_argument('-H', '--headers-off', dest='headers_off', action='store_true', help='turn off headers for all logs')
 	parser.add_argument('--help', action='help', help='display command details')
 	parser.add_argument('-l', '--list', action='store_true', help='list all log files, including size, date created & modified, sorted by modification time')
-	parser.add_argument('-L', '--lognames', action='store_true', help='list log names supported by command')
 	parser.add_argument('-m', '--merge', action='store_true', help='combine output of two or more logs based on the message timestamps')
 	parser.add_argument('-n', '--number', nargs=1, default=['1s'], help='range or number of lines to print')
 	parser.add_argument('-p', '--password', help='FMS console or SSH password')
@@ -1498,19 +1497,6 @@ def print_log (logName: str, count: int):
 		print ('Error: unknown output mode')
 	
 	return linesPrinted
-		
-
-#
-#	p r i n t _ l o g _ n a m e s
-#
-
-def print_log_names():
-	"""Print out log names used with their expected paths."""
-	print ('LOG NAME                PATH')
-	for log in LOG_CHOICES:
-		logPath = get_log_path (log)
-		if logPath == None: logPath = '---'
-		print('{:22}  {:<40}'.format (log, logPath))
 
 
 #
@@ -1519,7 +1505,7 @@ def print_log_names():
 
 def print_log_info():
 	"""Print one line per supported log with path, size, creation & mod timestamps."""
-	print ('LOG NAME                    SIZE  CREATED                    MODIFIED')
+	print ('LOG NAME                    SIZE  CREATED                    MODIFIED                   PATH')
 	for log in LOG_CHOICES:
 		fullPath = get_log_path (log)
 				
@@ -1531,7 +1517,7 @@ def print_log_info():
 				modTime = os.path.getmtime(fullPath)
 			except FileNotFoundError:
 				pass
-		
+			
 		if modTime > 0:
 			modTimestamp = time.ctime(modTime)
 			
@@ -1549,9 +1535,12 @@ def print_log_info():
 				#createTimestamp = datetime.datetime.fromtimestamp(statInfo.st_birthtime).isoformat()
 			
 			size = statInfo.st_size
-			print('{:21} {:>10}  {:<25}  {:<25}'.format (log, size, createTimestamp, modTimestamp))
+			print('{:21} {:>10}  {:<25}  {:<25}  {:<40}'.format (log, size, createTimestamp, modTimestamp, fullPath))
 		else:
-			print('{:21}             <missing>'.format (log))
+			if fullPath == None:
+				print('{:21}             ---'.format (log))
+			else:
+				print('{:21}             <missing>'.format (log))
 
 #
 #	p r i n t _ l o g _ h e a d e r
@@ -1952,10 +1941,6 @@ def main():
 			check_connectivity()
 			ignorePositionals = True
 		
-		if args.lognames:
-			print_log_names()
-			ignorePositionals = True
-			
 		if args.list:
 			print_log_info()
 			ignorePositionals = True
