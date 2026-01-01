@@ -1171,6 +1171,29 @@ def list_crash_reports() -> list:
 	pass
 
 
+def mac_log_tail (minutesBack: str):
+	
+	subprocess.run(['log', 'show', '--style', 'json', '--last', minutesBack + 'm', '--info', '--predicate' 'process=="fmserverd"'], capture_output=True, text=True).stdout.split('\n')
+
+
+def process_info ():
+	"""
+	Print the FMS related processes and their stats.
+	"""
+	
+	print ()
+	
+	if platform.system() == 'Darwin':
+		psResult = subprocess.run(['ps', '-u', 'fmserver', '-o', 'pid,%cpu,rss,stime,time,majflt,stat,comm'], capture_output=True, text=True).stdout.split('\n')
+	elif platform.system() == 'Linux':
+		psResult = subprocess.run(['ps', '-u', 'fmserver', '-o', 'pid,%cpu,rss,stime,times,maj_flt,stat,comm'], capture_output=True, text=True).stdout.split('\n')
+	else:
+		psResult = ['not implemented'] # Windows
+	
+	for proc in psResult:
+		print (proc)
+
+
 #
 #	r e a d _ t a i l
 #
@@ -1310,14 +1333,15 @@ def init_parser() -> argparse.ArgumentParser:
 	parser.add_argument('-l', '--list', action='store_true', help='list all log files, including size, date created & modified, sorted by modification time')
 	parser.add_argument('-m', '--merge', action='store_true', help='combine output of two or more logs based on the message timestamps')
 	parser.add_argument('-n', '--number', nargs=1, default=['1s'], help='range or number of lines to print')
-	parser.add_argument('-p', '--password', help='FMS console or SSH password')
+	parser.add_argument('-p', '--processes', action='store_true', dest='process_info', help='list FMS related processes and their stats')
+	parser.add_argument('-P', '--password', help='FMS console or SSH password')
 	parser.add_argument('-S', '--set', nargs=2, help='change log configuration option')
 	parser.add_argument('-s', '--succinct', action='store_true', help='strip less useful details from log output')
 	parser.add_argument('--ssh', nargs=1, help='use the connection string to fetch logs from remote server')
 	parser.add_argument('-t', dest='tail', action='store_true', help='wait for any new messages')
 	parser.add_argument('--tail', dest='tail', type=float, nargs=1, default=[-1.0], help='wait for any new messages, specifying number of seconds to wait for each file')
 	parser.add_argument('--truncate', action='store_true', help='cut off any output if beyond width of screen')
-	parser.add_argument('-u', '--user', help='FMS console or SSH account name')
+	parser.add_argument('-U', '--user', help='FMS console or SSH account name')
 	parser.add_argument('-N', '--network', action='store_true', help='list connections and their status') # TODO: throwing "expected log name" error
 	parser.add_argument('-V', '--version', action='store_true', help='version info for fmslogs and FMS')
 	# Hack to avoid error if there is only an option specified but no positional argument
@@ -1943,6 +1967,10 @@ def main():
 		
 		if args.list:
 			print_log_info()
+			ignorePositionals = True
+
+		if args.process_info:
+			process_info()
 			ignorePositionals = True
 			
 		if args.set:
