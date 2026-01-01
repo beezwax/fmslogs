@@ -4,7 +4,7 @@
 """
 Filename: fmslogs.py
 Author: Simon Brown on 10/15/2025
-Version: 0.27, 2025-12-31
+Version: 0.28, 2025-12-31
 Purpose: Display FileMaker Server logs and change logging options.
 """
 
@@ -33,7 +33,7 @@ fmslogs -s topcall 1 # enable TopCall.log
 open either directory or log file in text editor, eg $EDITOR
 """
 
-VERSION = "0.27 - 2025-12-31"
+VERSION = "0.28 - 2025-12-31"
 TIMESTAMP_START = None
 FILTER_REGEX = None
 TEXTWRAP = textwrap.TextWrapper(width=120,tabsize=10)
@@ -1333,7 +1333,7 @@ def init_parser() -> argparse.ArgumentParser:
 	parser.add_argument('-l', '--list', action='store_true', help='list all log files, including size, date created & modified, sorted by modification time')
 	parser.add_argument('-m', '--merge', action='store_true', help='combine output of two or more logs based on the message timestamps')
 	parser.add_argument('-n', '--number', nargs=1, default=['1s'], help='range or number of lines to print')
-	parser.add_argument('-p', '--processes', action='store_true', dest='process_info', help='list FMS related processes and their stats')
+	parser.add_argument('-p', '--process-info', action='store_true', dest='process_info', help='list FMS related processes and their stats')
 	parser.add_argument('-P', '--password', help='FMS console or SSH password')
 	parser.add_argument('-S', '--set', nargs=2, help='change log configuration option')
 	parser.add_argument('-s', '--succinct', action='store_true', help='strip less useful details from log output')

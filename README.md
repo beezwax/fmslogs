@@ -89,6 +89,7 @@ options:
   -l, --list                list all log files, including size, date created & modified, sorted by modification time
   -n, --number RANGE        quantity of lines to print
   -N, --network             network usage info
+  -p, --process-info		metrics for FMS processes
   -S, --set SET             change log configuration option
   -s, --succinct            strip less useful details from log output (partially implemented)
   --ssh SSH                 use the connection string to fetch logs from remote server
@@ -139,6 +140,9 @@ you may want to use the --truncate option to have an exact fit.
 
 ### -N, --network
 List ports in use by FileMaker's processes.
+
+### -p, --process-info
+Display metrics for all processes running under the fmserver user. Metrics include process ID, CPU & memory usage, and process start time.
 
 ### -s, --succinct
 Shorten the output of log lines where possible. This includes things like redundant time zones and host names, and shortening some values (eg, Warning becomes Warn).
