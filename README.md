@@ -35,7 +35,7 @@ Design Goals:
 Current functionality with major issues:
 - `-b` or `--begin`: only working with durations (eg, 'd' or '1d' for 1 day)
 - `-m` or `--merge`: not working
-- `-S` or `--set`: not working
+- `-S` or `--set`: not working except for `enable/disable debuglogging`
 - `-s` or `--succinct`: partially implemented
 - `--ssh`: not implmented
 - `-t` or `--tail`: does not print current log segment before starting to follow/tail
@@ -90,7 +90,7 @@ options:
   -n, --number RANGE        quantity of lines to print
   -N, --network             network usage info
   -p, --process-info		metrics for FMS processes
-  -S, --set SET             change log configuration option
+  -S, --set SET             change log configuration options
   -s, --succinct            strip less useful details from log output (partially implemented)
   --ssh SSH                 use the connection string to fetch logs from remote server
   -t, --tail                wait for any new messages after printing current end of log
@@ -146,6 +146,11 @@ Display metrics for all processes running under the fmserver user. Metrics inclu
 
 ### -s, --succinct
 Shorten the output of log lines where possible. This includes things like redundant time zones and host names, and shortening some values (eg, Warning becomes Warn).
+
+### -S, --set VERB NOUN
+Change FMS configuration options. It takes two parameters, a noun and a verb. Currently, verbs are `enable` or `disable`.
+The only supported noun is `debuglogging` to enable the detailed FMS logs such as fmsDebug.log. When enabled, this will
+significantly slow down some server operations and the log files can get large quickly.
 
 ### -t, --tail
 Print messages as they are added to log files until user cancels with Ctrl-C.

@@ -8,7 +8,7 @@ Version: 0.28, 2025-12-31
 Purpose: Display FileMaker Server logs and change logging options.
 """
 
-import argparse, curses, datetime, glob, linecache, os, pathlib, platform, pprint, re, socket, subprocess, socket, sys, tempfile, textwrap, time, http.client, ssl, urllib.request
+import argparse, curses, datetime, glob, linecache, os, pathlib, platform, pprint, re, shutil, socket, subprocess, socket, sys, tempfile, textwrap, time, http.client, ssl, urllib.request
 from collections import OrderedDict
 from enum import Enum
 from contextlib import ExitStack
@@ -585,62 +585,6 @@ def check_endpoint_status (name: str, host: str, endpoint: str, expectedStatus: 
 		conn.close()
 	return resultFlag
 
-#
-#	p r i n t _ c e r t i f i c a t e _ i n f o
-#
-
-def print_certificate_info (name: str, host: str, port=443) -> bool:
-	"""
-	Display the SSL certificate attributes used by host.
-	This uses an undocumented interface, as all Python alternatives
-	to extract SSL info require additional modules to be installed.
-	https://github.com/python/cpython/blob/main/Lib/test/test_ssl.py
-	"""
-	
-	returnFlag = False
-	context =  ssl.create_default_context()
-	context.check_hostname = False
-	context.verify_mode = ssl.CERT_NONE
-	
-	with tempfile.NamedTemporaryFile (mode='w', encoding='utf8') as certFile:
-		certFilePath = certFile.name
-
-		try:
-			certFile.write(ssl.get_server_certificate((host, port)))
-			# We don't have to close before _test_decode_cert below as long as we flush first.
-			certFile.flush()
-		except ConnectionRefusedError:
-			print ('https://%s:%i not responding' % (host,port))
-			return False
-		except Exception as e:
-			print (':', e)
-			return False
-		
-		try:
-			certDict = ssl._ssl._test_decode_cert(certFilePath)
-		except Exception as e:
-			print("Error decoding certificate: {:}".format(e))
-		else:
-			print ('Subject:')
-			print (' ',end='')
-			pprint.pprint (certDict ['subject'])
-			if 'subjectAltName' in certDict:
-				print (' ',end='')
-				pprint.pprint (certDict ['subjectAltName'], indent=2)
-			print ('Not Before:', certDict ['notBefore'])
-			print ('Not After:', certDict ['notAfter'])
-			if 'OCSP' in certDict:
-				print ('OCSP:', certDict ['OCSP'])
-			if 'caIssuers' in certDict:
-				print ('CA Issuers:', certDict ['caIssuers'])
-			print ('Serial Number:', certDict ['serialNumber'])		
-			print ('Issuer:')
-			pprint.pprint (certDict['issuer'], indent=1)
-			print ('Version:', certDict ['version'])		
-	
-	returnFlag = True
-
-	return returnFlag
 
 #
 #	p r i n t _ t l s _ v e r s i o n
@@ -662,40 +606,6 @@ def print_tls_version (host: str, port=443) -> bool:
 		conn = ssock.connect ((host, port))
 		returnFlag = True
 		print('SSL/TLS version:', ssock.version())
-	except ssl.SSLError as e:
-		print ('  ', e)
-	finally:
-		sock.close()
-	
-	return returnFlag
-
-
-#
-#	p r i n t _ s s l _ o p t i o n s_ c r y p t o
-#
-
-def print_ssl_options_crypto (name: str, host: str, port=443) -> bool:
-	
-	# Requires non-default module.
-	from cryptography import x509
-	from cryptography.hazmat.backends import default_backend
-	
-	returnFlag = False
-	context =  ssl.create_default_context()
-	context.check_hostname = False
-	context.verify_mode = ssl.CERT_NONE
-	try:
-		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		sock.settimeout (4)
-		ssock = context.wrap_socket(sock, server_hostname=host)
-		conn = ssock.connect ((host, port))
-		returnFlag = True
-		print('   Security Protocol:', ssock.version())
-		cert_der = ssock.getpeercert(binary_form=True)
-		print (type (cert_der))
-		print (cert_der,'\n')
-		cert = x509.load_der_x509_certificate(cert_der, default_backend())
-		print ('  ', cert)
 	except ssl.SSLError as e:
 		print ('  ', e)
 	finally:
@@ -1105,12 +1015,29 @@ def find_first_timestamp (filePath: str, timestamp: datetime.datetime) -> int:
 
 def handle_set (verb: str, noun: str):
 	"""
-	Execute the changes specified in parameters.
+	Execute the config changes specified in parameters.
 	"""
 	
-	if parameters [0] == '':
-		pass
+	validOptions = False	# may still fail for other reasons
 	
+	if noun == 'debuglogging':
+		if platform.system() in ['Darwin', 'Linux']:
+			clarisConfigDir = BASE_PATH + '/Database Server/bin'
+		else:
+			clarisConfigDir = BASE_PATH + '/Database Server'
+		if verb == 'enable':
+			claris_config_write (clarisConfigDir)
+		elif verb == 'disable':
+			claris_config_remove (clarisConfigDir)
+		else:
+			print ('Error: unrecognized parameter for debuglogging:', noun)
+			print ('Use "enable" or "disable" instead.')
+		
+		validOptions = True
+	
+	if not validOptions:
+		print ('Error: unrecognized parameter(s) for set:', verb, noun)
+
 
 def init_curses():
     global STDSCR, SCREENCOLS, SCREENROWS
@@ -1174,6 +1101,39 @@ def list_crash_reports() -> list:
 def mac_log_tail (minutesBack: str):
 	
 	subprocess.run(['log', 'show', '--style', 'json', '--last', minutesBack + 'm', '--info', '--predicate' 'process=="fmserverd"'], capture_output=True, text=True).stdout.split('\n')
+
+#
+#	p r i n t _ s s l _ o p t i o n s_ c r y p t o
+#
+
+def print_ssl_options_crypto (name: str, host: str, port=443) -> bool:
+	
+	# Requires non-default module.
+	from cryptography import x509
+	from cryptography.hazmat.backends import default_backend
+	
+	returnFlag = False
+	context =  ssl.create_default_context()
+	context.check_hostname = False
+	context.verify_mode = ssl.CERT_NONE
+	try:
+		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		sock.settimeout (4)
+		ssock = context.wrap_socket(sock, server_hostname=host)
+		conn = ssock.connect ((host, port))
+		returnFlag = True
+		print('   Security Protocol:', ssock.version())
+		cert_der = ssock.getpeercert(binary_form=True)
+		print (type (cert_der))
+		print (cert_der,'\n')
+		cert = x509.load_der_x509_certificate(cert_der, default_backend())
+		print ('  ', cert)
+	except ssl.SSLError as e:
+		print ('  ', e)
+	finally:
+		sock.close()
+	
+	return returnFlag
 
 
 def process_info ():
@@ -1738,6 +1698,61 @@ def print_net_status():
 
 
 #
+#	p r i n t _ c e r t i f i c a t e _ i n f o
+#
+
+def print_certificate_info (name: str, host: str, port=443) -> bool:
+	"""
+	Display the SSL certificate attributes used by host.
+	This uses an undocumented interface, as all Python alternatives
+	to extract SSL info require additional modules to be installed.
+	https://github.com/python/cpython/blob/main/Lib/test/test_ssl.py
+	"""
+	
+	context =  ssl.create_default_context()
+	context.check_hostname = False
+	context.verify_mode = ssl.CERT_NONE
+	
+	with tempfile.NamedTemporaryFile (mode='w', encoding='utf8') as certFile:
+		certFilePath = certFile.name
+
+		try:
+			certFile.write(ssl.get_server_certificate((host, port)))
+			# We don't have to close before _test_decode_cert below as long as we flush first.
+			certFile.flush()
+		except ConnectionRefusedError:
+			print ('https://%s:%i not responding' % (host,port))
+			return False
+		except Exception as e:
+			print (':', e)
+			return False
+		
+		try:
+			certDict = ssl._ssl._test_decode_cert(certFilePath)
+		except Exception as e:
+			print("Error decoding certificate: {:}".format(e))
+		else:
+			print ('Subject:')
+			print (' ',end='')
+			pprint.pprint (certDict ['subject'])
+			if 'subjectAltName' in certDict:
+				print (' ',end='')
+				pprint.pprint (certDict ['subjectAltName'], indent=2)
+			print ('Not Before:', certDict ['notBefore'])
+			print ('Not After:', certDict ['notAfter'])
+			if 'OCSP' in certDict:
+				print ('OCSP:', certDict ['OCSP'])
+			if 'caIssuers' in certDict:
+				print ('CA Issuers:', certDict ['caIssuers'])
+			print ('Serial Number:', certDict ['serialNumber'])		
+			print ('Issuer:')
+			pprint.pprint (certDict['issuer'], indent=1)
+			print ('Version:', certDict ['version'])		
+	
+	return True
+
+
+#
 #	p r i n t _ t a i l
 #
 
@@ -1916,7 +1931,7 @@ def print_version():
 
 
 #
-#   p r i n t _ h e a d
+#   s c a n _ f i l e _ l a s t _ m a t c h
 #
 
 def scan_file_last_match (logPath: str, matchStr: str) -> str:
@@ -1942,6 +1957,68 @@ def scan_file_last_match (logPath: str, matchStr: str) -> str:
 		lineNum += 1
 			
 	return lastMatch
+
+def claris_config_remove(targetDir: str) -> bool:
+	
+	"""
+	Remove ClarisConfig.json from target directory.
+	"""
+
+	configPath = os.path.join(targetDir, "ClarisConfig.json")
+	print ()
+
+	try:
+		os.remove(configPath)
+	except FileNotFoundError:
+		print ('No ClarisConfig.json file was found to remove.')
+		print ()
+		return False
+	except PermissionError:
+		print("Error: Could not remove", configPath)
+		print ('Adjust permissions or run fmslogs with elevated privileges.')
+		print ()
+		return False
+	
+	print ('The previous ClarisConfig.json file has been removed.')
+	print ('Restart FMS to apply the change.')
+	print ()
+	return True
+
+
+def claris_config_write(targetDir: str) -> bool:
+	
+	"""
+	Write CLARIS_CONFIG text to a ClarisConfig.json file in target directory.
+	If the file already exists, attempt to move it aside (renames with .bak).
+	"""
+
+	configPath = os.path.join(targetDir, "ClarisConfig.json")
+	print ()
+
+	try:
+		try:
+			# If there's an existing config file, attempt to move it aside.
+			backupPath = configPath + ".bak"
+			shutil.move(configPath, backupPath)
+		except FileNotFoundError:
+			pass
+		except FileExistsError:
+			pass
+
+		with open(configPath, "w") as f:
+			f.write(CLARIS_CONFIG)
+		
+		print ('The ClarisConfig.json file has been created.')
+		print ('Restart FMS to apply the change.')
+		print ()
+		return True
+	except PermissionError:
+		print("Error: Could not write to", configPath)
+		print ('Adjust permissions or run fmslogs with elevated privileges.')
+		print ()
+		return False
+	
+	return True
 
 
 #
@@ -1975,9 +2052,10 @@ def main():
 			
 		if args.set:
 			# Do first in case enabling a log
-			print (args.set)
+			#print (args.set)
 			handle_set (args.set[0], args.set[1])
 			ignorePositionals = True
+			break
 			
 		if args.version:
 			print_version()
