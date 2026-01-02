@@ -844,6 +844,55 @@ def expand_tabs_for_line (logName: str, line: str) -> str:
 		return ''.join(result)
 
 
+def get_folder_size(path='.'):
+    total = 0
+    for entry in os.scandir(path):
+        if entry.is_file():
+            total += entry.stat().st_size
+        elif entry.is_dir():
+            total += folder_size(entry.path)
+    return total
+
+def get_databases_directories() -> tuple:
+	"""
+	Return a tuple of all four possible database directory paths and two possible container paths by extracting
+	the locations in the FMS Event.log file, and if necessary, the -old log.
+	There is a possibility that this information may not be present in the either log file,
+	in which case the default path will be None.
+	"""
+	
+	defaultPathRE = re.compile (r'Default database location: (file.*:[^\s]+)')
+	securePathRE = re.compile (r'Secure database folder enabled: (file.*:[^\s]+)')
+	additionalPath1RE = re.compile (r'Additional database folder \[1\] enabled: (file.*:[^\s]+)')
+	additionalPath2RE = re.compile (r'Additional database folder \[2\] enabled: (file.*:[^\s]+)')
+	remoteContainerPath1RE = re.compile (r'Separate remote container folder \[1\] enabled, .*: (file.*:[^\s]+)')
+	remoteContainerPath2RE = re.compile (r'Separate remote container folder \[2\] enabled, .*: (file.*:[^\s]+)')
+
+	"""
+	Default database location: filemac:/internal/Library/FileMaker Server/Data/Databases/
+	Secure database folder enabled: filemac:/internal/Library/FileMaker Server/Data/Secure/
+	Additional database folder [1] enabled: filemac:/internal/Library/FileMaker Server/Data/DBs/
+	Additional database folder [2] disabled.
+	Separate remote container folder [1] enabled, without backups: filelinux:/FileMakerData/Containers/
+	Additional database folder [2] disabled.
+	"""
+
+	eventLogPath = get_log_path ('event')
+	defaultPath = scan_file_last_match (eventLogPath, defaultPathRE)
+
+	if defaultPath == None:
+		# Nothing in current log file, see if we can find in -old log.
+		eventLogPath = eventLogPath.replace ('.log', '-old.log')
+		defaultPath = scan_file_last_match (eventLogPath, defaultPathRE)
+
+	securePath = scan_file_last_match (eventLogPath, securePathRE)
+	additionalPath1 = scan_file_last_match (eventLogPath, additionalPath1RE)
+	additionalPath2 = scan_file_last_match (eventLogPath, additionalPath2RE)
+	remoteContainerPath1 = scan_file_last_match (eventLogPath, remoteContainerPath1RE)
+	remoteContainerPath2 = scan_file_last_match (eventLogPath, remoteContainerPath2RE)
+
+	return (defaultPath, securePath, additionalPath1, additionalPath2, remoteContainerPath1, remoteContainerPath2)
+
 
 def follow_file(some_file):
 	"""
@@ -1285,6 +1334,7 @@ def init_parser() -> argparse.ArgumentParser:
 
 	parser.add_argument('-b', '--begin', nargs=1, help='start at first message on or after time or time interval')
 	parser.add_argument('-c', '--check-connectivity', dest='check_connectivity', action='store_true', help='check connectivity of API endpoints')
+	parser.add_argument('-d', '--databases', action='store_true', help='display database & container directories')
 	parser.add_argument('-e', '--edit', nargs=1, help='open the log file using the command defined by $EDITOR')
 	parser.add_argument('-f', '--filter', nargs=1, help='only return lines matching regex expression')
 	parser.add_argument('-h', '--head', action='store_true', help='display the first lines of log files')
@@ -1489,7 +1539,10 @@ def print_log (logName: str, count: int):
 
 def print_log_info():
 	"""Print one line per supported log with path, size, creation & mod timestamps."""
+
+	print()
 	print ('LOG NAME                    SIZE  CREATED                    MODIFIED                   PATH')
+
 	for log in LOG_CHOICES:
 		fullPath = get_log_path (log)
 				
@@ -1501,7 +1554,7 @@ def print_log_info():
 				modTime = os.path.getmtime(fullPath)
 			except FileNotFoundError:
 				pass
-			
+		
 		if modTime > 0:
 			modTimestamp = time.ctime(modTime)
 			
@@ -1525,6 +1578,30 @@ def print_log_info():
 				print('{:21}             ---'.format (log))
 			else:
 				print('{:21}             <missing>'.format (log))
+	
+	print ()
+
+
+#
+#	p r i n t _ d b _ d i r s _ i n f o
+#
+ 
+def print_db_dirs_info():
+	"""
+	Print the database folder paths extracted from Event.log.
+	"""
+	(defaultPath, securePath, additionalPath1, additionalPath2, remoteContainerPath1, remoteContainerPath2) = get_databases_directories()
+	
+	print ()
+	print ('=== DATABASE DIRECTORIES ===')
+	print ('  Default:                ', defaultPath)
+	print ('  Secure:                 ', securePath)
+	print ('  Additional Databases #1:', additionalPath1)
+	print ('  External Container #1:  ', remoteContainerPath1)
+	print ('  Additional Databases #2:', additionalPath2)
+	print ('  External Container #2:  ', remoteContainerPath2)
+	print ()
+
 
 #
 #	p r i n t _ l o g _ h e a d e r
@@ -1958,6 +2035,7 @@ def scan_file_last_match (logPath: str, matchStr: str) -> str:
 			
 	return lastMatch
 
+
 def claris_config_remove(targetDir: str) -> bool:
 	
 	"""
@@ -1979,7 +2057,7 @@ def claris_config_remove(targetDir: str) -> bool:
 		print ()
 		return False
 	
-	print ('The previous ClarisConfig.json file has been removed.')
+	print ('The ClarisConfig.json file has been removed.')
 	print ('Restart FMS to apply the change.')
 	print ()
 	return True
@@ -2042,6 +2120,11 @@ def main():
 			check_connectivity()
 			ignorePositionals = True
 		
+		if args.databases:
+			print_db_dirs_info()
+			ignorePositionals = True
+			break
+
 		if args.list:
 			print_log_info()
 			ignorePositionals = True
