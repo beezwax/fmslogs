@@ -137,7 +137,7 @@ Disable the printing of any log column headers the command may use, and don't sk
 Normally, unless tailing a log or printing a log that does not have any fixed columns, the command includes its own column header as the first line for each log.
 
 ### -l, --list
-List all log names and paths for the current platform and the database directories being used based on the last Event log message. For logs that are present, list their creation and modification timestamps and their size.
+List all log names and paths for the current platform. For logs that are present, list their creation and modification timestamps and their size.
 
 ### -n, --number
 Number of log message lines or screens to print. For screens, add 's' as a suffix, e.g. '-n 2s' for two screens. Since some messages may not fit current screen size
