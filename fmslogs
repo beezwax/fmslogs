@@ -4,11 +4,12 @@
 """
 Filename: fmslogs.py
 Author: Simon Brown on 10/15/2025
-Version: 0.28, 2025-12-31
+Version: 0.29, 2026-01-03
 Purpose: Display FileMaker Server logs and change logging options.
 """
 
-import argparse, curses, datetime, glob, linecache, os, pathlib, platform, pprint, re, shutil, socket, subprocess, socket, sys, tempfile, textwrap, time, http.client, ssl, urllib.request
+import argparse, curses, datetime, glob, http.client, itertools, linecache, os, pathlib, platform, pprint
+import re, shutil, socket, subprocess, socket, sys, tempfile, textwrap, threading, time, ssl, urllib.request
 from collections import OrderedDict
 from enum import Enum
 from contextlib import ExitStack
@@ -33,7 +34,7 @@ fmslogs -s topcall 1 # enable TopCall.log
 open either directory or log file in text editor, eg $EDITOR
 """
 
-VERSION = "0.28 - 2025-12-31"
+VERSION = "0.29 - 2026-01-03"
 TIMESTAMP_START = None
 FILTER_REGEX = None
 TEXTWRAP = textwrap.TextWrapper(width=120,tabsize=10)
@@ -731,6 +732,75 @@ def check_file_validity (path: str):
 	if os.path.isdir(path):
 		raise FileCheckError ("'%s' is a directory" % (path))
 
+#
+#	c l a r i s _ c o n f i g _ r e m o v e
+#
+
+def claris_config_remove(targetDir: str) -> bool:
+	
+	"""
+	Remove ClarisConfig.json from target directory.
+	"""
+
+	configPath = os.path.join(targetDir, "ClarisConfig.json")
+	print ()
+
+	try:
+		os.remove(configPath)
+	except FileNotFoundError:
+		print ('No ClarisConfig.json file was found to remove.')
+		print ()
+		return False
+	except PermissionError:
+		print("Error: Could not remove", configPath)
+		print ('Adjust permissions or run fmslogs with elevated privileges.')
+		print ()
+		return False
+	
+	print ('The ClarisConfig.json file has been removed.')
+	print ('Restart FMS to apply the change.')
+	print ()
+	return True
+
+#
+#	c l a r i s _ c o n f i g _ w r i t e
+#
+
+def claris_config_write(targetDir: str) -> bool:
+	
+	"""
+	Write CLARIS_CONFIG text to a ClarisConfig.json file in target directory.
+	If the file already exists, attempt to move it aside (renames with .bak).
+	"""
+
+	configPath = os.path.join(targetDir, "ClarisConfig.json")
+	print ()
+
+	try:
+		try:
+			# If there's an existing config file, attempt to move it aside.
+			backupPath = configPath + ".bak"
+			shutil.move(configPath, backupPath)
+		except FileNotFoundError:
+			pass
+		except FileExistsError:
+			pass
+
+		with open(configPath, "w") as f:
+			f.write(CLARIS_CONFIG)
+		
+		print ('The ClarisConfig.json file has been created.')
+		print ('Restart FMS to apply the change.')
+		print ()
+		return True
+	except PermissionError:
+		print("Error: Could not write to", configPath)
+		print ('Adjust permissions or run fmslogs with elevated privileges.')
+		print ()
+		return False
+	
+	return True
+
 
 #
 #	c o m p i l e _ f i l t e r
@@ -750,6 +820,29 @@ def compile_filter(regex: str) -> bool:
 	return isValid
 
 
+def convert_filemaker_path (fmPath: str) -> str:
+	"""
+	Convert a FileMaker path (filemac:, filelinux:, filewin:) to a POSIX style path that can be used in Python.
+	"""
+
+	# Example paths:
+	"""
+	filemac:/internal-vol/Library/FileMaker Server/Data/Databases/	# drive name used as prefix
+	filelinux:/opt/FileMaker/FileMaker Server/Data/Databases/
+	filewin:/C:/Program Files/FileMaker/FileMaker Server/Data/Databases/
+	"""
+
+	if fmPath.startswith ('filemac:/'):
+		return fmPath.replace ('filemac:/', '/Volumes/')
+	elif fmPath.startswith ('filelinux:/'):
+		return fmPath.replace ('filelinux:/', '/opt/FileMaker/')
+	elif fmPath.startswith ('filewin:/'):
+		winPath = fmPath.replace ('filewin:/', '')
+		winPath = winPath.replace ('/', '\\')
+		return winPath
+	else:
+		return fmPath
+	
 #
 #	e d i t _ l o g
 #
@@ -843,17 +936,22 @@ def expand_tabs_for_line (logName: str, line: str) -> str:
 	else:
 		return ''.join(result)
 
+#
+#	g e t _ f o l d e r _ s i z e
+#
 
-def get_folder_size(path='.'):
-    total = 0
-    for entry in os.scandir(path):
-        if entry.is_file():
-            total += entry.stat().st_size
-        elif entry.is_dir():
-            total += folder_size(entry.path)
-    return total
+def get_folder_size(path='.') -> int:
+	total = 0
+	if path != None:
+		for entry in os.scandir(path):
+			if entry.is_file():
+				total += entry.stat().st_size
+			elif entry.is_dir():
+				total += get_folder_size(entry.path)
+	return total
 
-def get_databases_directories() -> tuple:
+
+def get_db_directories() -> tuple:
 	"""
 	Return a tuple of all four possible database directory paths and two possible container paths by extracting
 	the locations in the FMS Event.log file, and if necessary, the -old log.
@@ -861,12 +959,12 @@ def get_databases_directories() -> tuple:
 	in which case the default path will be None.
 	"""
 	
-	defaultPathRE = re.compile (r'Default database location: (file.*:[^\s]+)')
-	securePathRE = re.compile (r'Secure database folder enabled: (file.*:[^\s]+)')
-	additionalPath1RE = re.compile (r'Additional database folder \[1\] enabled: (file.*:[^\s]+)')
-	additionalPath2RE = re.compile (r'Additional database folder \[2\] enabled: (file.*:[^\s]+)')
-	remoteContainerPath1RE = re.compile (r'Separate remote container folder \[1\] enabled, .*: (file.*:[^\s]+)')
-	remoteContainerPath2RE = re.compile (r'Separate remote container folder \[2\] enabled, .*: (file.*:[^\s]+)')
+	defaultPathRE = re.compile (r'Default database location: (file.*)')
+	securePathRE = re.compile (r'Secure database folder enabled: (file.*)')
+	additionalPath1RE = re.compile (r'Additional database folder \[1\] enabled: (file.*)')
+	additionalPath2RE = re.compile (r'Additional database folder \[2\] enabled: (file.*)')
+	remoteContainerPath1RE = re.compile (r'Separate remote container folder \[1\] enabled, (.*)')
+	remoteContainerPath2RE = re.compile (r'Separate remote container folder \[2\] enabled, (.*)')
 
 	"""
 	Default database location: filemac:/internal/Library/FileMaker Server/Data/Databases/
@@ -884,12 +982,23 @@ def get_databases_directories() -> tuple:
 		# Nothing in current log file, see if we can find in -old log.
 		eventLogPath = eventLogPath.replace ('.log', '-old.log')
 		defaultPath = scan_file_last_match (eventLogPath, defaultPathRE)
+	defaultPath = convert_filemaker_path (defaultPath)
 
 	securePath = scan_file_last_match (eventLogPath, securePathRE)
+	securePath = convert_filemaker_path (securePath)
+
+	# These paths are optional.
 	additionalPath1 = scan_file_last_match (eventLogPath, additionalPath1RE)
+	if additionalPath1: additionalPath1 = convert_filemaker_path (additionalPath1)
 	additionalPath2 = scan_file_last_match (eventLogPath, additionalPath2RE)
+	if additionalPath2: additionalPath2 = convert_filemaker_path (additionalPath2)
 	remoteContainerPath1 = scan_file_last_match (eventLogPath, remoteContainerPath1RE)
-	remoteContainerPath2 = scan_file_last_match (eventLogPath, remoteContainerPath2RE)
+	if remoteContainerPath1:
+		remoteContainerPath1 = convert_filemaker_path (remoteContainerPath1)
+		remoteContainerPath2 = scan_file_last_match (eventLogPath, remoteContainerPath2RE)
+		if remoteContainerPath2: remoteContainerPath2 = convert_filemaker_path (remoteContainerPath2)
+	else:
+		remoteContainerPath2 = None
 
 	return (defaultPath, securePath, additionalPath1, additionalPath2, remoteContainerPath1, remoteContainerPath2)
 
@@ -1094,6 +1203,50 @@ def init_curses():
     curses.noecho()
     SCREENROWS, SCREENCOLS = STDSCR.getmaxyx()
     STDSCR.scrollok(1)
+
+
+#
+#	i n i t _ p a r s e r
+#
+
+def init_parser() -> argparse.ArgumentParser:
+	"""Setup parameters used for command interface. Does not attempt to parse."""
+
+	parser = argparse.ArgumentParser(
+		prog='fmslogs',
+		add_help=False,
+		formatter_class=argparse.RawDescriptionHelpFormatter,
+		description='View FileMaker Server logs and set logging options.')
+
+	parser.add_argument('-b', '--begin', nargs=1, help='start at first message on or after time or time interval')
+	parser.add_argument('-c', '--check-connectivity', dest='check_connectivity', action='store_true', help='check connectivity of API endpoints')
+	parser.add_argument('-d', '--databases', action='store_true', help='display database & container directories')
+	parser.add_argument('-e', '--edit', nargs=1, help='open the log file using the command defined by $EDITOR')
+	parser.add_argument('-f', '--filter', nargs=1, help='only return lines matching regex expression')
+	parser.add_argument('-h', '--head', action='store_true', help='display the first lines of log files')
+	parser.add_argument('-H', '--headers-off', dest='headers_off', action='store_true', help='turn off headers for all logs')
+	parser.add_argument('--help', action='help', help='display command details')
+	parser.add_argument('-l', '--list', action='store_true', help='list all log files, including size, date created & modified, sorted by modification time')
+	parser.add_argument('-m', '--merge', action='store_true', help='combine output of two or more logs based on the message timestamps')
+	parser.add_argument('-n', '--number', nargs=1, default=['1s'], help='range or number of lines to print')
+	parser.add_argument('-p', '--process-info', action='store_true', dest='process_info', help='list FMS related processes and their stats')
+	parser.add_argument('-P', '--password', help='FMS console or SSH password')
+	parser.add_argument('-S', '--set', nargs=2, help='change log configuration option')
+	parser.add_argument('-s', '--succinct', action='store_true', help='strip less useful details from log output')
+	parser.add_argument('--ssh', nargs=1, help='use the connection string to fetch logs from remote server')
+	parser.add_argument('-t', dest='tail', action='store_true', help='wait for any new messages')
+	parser.add_argument('--tail', dest='tail', type=float, nargs=1, default=[-1.0], help='wait for any new messages, specifying number of seconds to wait for each file')
+	parser.add_argument('--truncate', action='store_true', help='cut off any output if beyond width of screen')
+	parser.add_argument('-U', '--user', help='FMS console or SSH account name')
+	parser.add_argument('-N', '--network', action='store_true', help='list connections and their status') # TODO: throwing "expected log name" error
+	parser.add_argument('-V', '--version', action='store_true', help='version info for fmslogs and FMS')
+	# Hack to avoid error if there is only an option specified but no positional argument
+	parser.add_argument('logs', nargs='*', help='log name to display')
+	#parser.add_argument('log2', nargs='?', help='additional log to display')
+
+	parser.epilog = HELP_EPILOGUE
+	
+	return parser
 
 
 #
@@ -1320,160 +1473,6 @@ def read_tail_time (filePath: str, linesFromEnd: int) -> list:
 
 
 #
-#	i n i t _ p a r s e r
-#
-
-def init_parser() -> argparse.ArgumentParser:
-	"""Setup parameters used for command interface. Does not attempt to parse."""
-
-	parser = argparse.ArgumentParser(
-		prog='fmslogs',
-		add_help=False,
-		formatter_class=argparse.RawDescriptionHelpFormatter,
-		description='View FileMaker Server logs and set logging options.')
-
-	parser.add_argument('-b', '--begin', nargs=1, help='start at first message on or after time or time interval')
-	parser.add_argument('-c', '--check-connectivity', dest='check_connectivity', action='store_true', help='check connectivity of API endpoints')
-	parser.add_argument('-d', '--databases', action='store_true', help='display database & container directories')
-	parser.add_argument('-e', '--edit', nargs=1, help='open the log file using the command defined by $EDITOR')
-	parser.add_argument('-f', '--filter', nargs=1, help='only return lines matching regex expression')
-	parser.add_argument('-h', '--head', action='store_true', help='display the first lines of log files')
-	parser.add_argument('-H', '--headers-off', dest='headers_off', action='store_true', help='turn off headers for all logs')
-	parser.add_argument('--help', action='help', help='display command details')
-	parser.add_argument('-l', '--list', action='store_true', help='list all log files, including size, date created & modified, sorted by modification time')
-	parser.add_argument('-m', '--merge', action='store_true', help='combine output of two or more logs based on the message timestamps')
-	parser.add_argument('-n', '--number', nargs=1, default=['1s'], help='range or number of lines to print')
-	parser.add_argument('-p', '--process-info', action='store_true', dest='process_info', help='list FMS related processes and their stats')
-	parser.add_argument('-P', '--password', help='FMS console or SSH password')
-	parser.add_argument('-S', '--set', nargs=2, help='change log configuration option')
-	parser.add_argument('-s', '--succinct', action='store_true', help='strip less useful details from log output')
-	parser.add_argument('--ssh', nargs=1, help='use the connection string to fetch logs from remote server')
-	parser.add_argument('-t', dest='tail', action='store_true', help='wait for any new messages')
-	parser.add_argument('--tail', dest='tail', type=float, nargs=1, default=[-1.0], help='wait for any new messages, specifying number of seconds to wait for each file')
-	parser.add_argument('--truncate', action='store_true', help='cut off any output if beyond width of screen')
-	parser.add_argument('-U', '--user', help='FMS console or SSH account name')
-	parser.add_argument('-N', '--network', action='store_true', help='list connections and their status') # TODO: throwing "expected log name" error
-	parser.add_argument('-V', '--version', action='store_true', help='version info for fmslogs and FMS')
-	# Hack to avoid error if there is only an option specified but no positional argument
-	parser.add_argument('logs', nargs='*', help='log name to display')
-	#parser.add_argument('log2', nargs='?', help='additional log to display')
-
-	parser.epilog = HELP_EPILOGUE
-	
-	return parser
-
-
-#
-#	s t r i p _ l i n e
-#
-
-def strip_line (logName: str, line: str) -> str:
-	"""
-	When possible, remove repetitive or extraneous text in the logs.
-	This is done after expanding tabs so columns should be at fixed positions.
-	"""
-	
-	if logName in ['access','event']:
-		if line [24] == '-':
-			items = line.split('\t')
-			line = '{:23.23}  {:11}  {:4}  {:<}'.format (items[0], items[1], items[2], items[4])		# remove timezone and hostname
-	if logName == 'admin':
-		if line [20] == '-':
-			line = line [:20] + line [26:]							# remove timezone
-	if logName in ['clientstats','dapi','topcall']:
-			line = line [:23] + line [29]								# remove timezone
-	if logName == 'dapi':
-			line = line [:23] + line [29:45] + line[62:]			# remove timezone & hostname
-
-	return line
-
-
-# =================
-
-class TailPrint (object):
-	
-	# based on https://github.com/kasun/python-tail
-	
-	''' Represents a tail command. '''
-	def __init__(self, logNames: list):
-		'''Initiate a Tail instance.
-			Check for file validity, assigns callback function to standard out.
-			Arguments:
-				tailedFiles - List of file to be followed. '''
-				
-		self.logNames = []
-		self.logPaths = []
-		
-		for log in logNames:
-			path = get_log_path (log)
-			self.check_file_validity(path)
-			self.logNames.append (log)
-			self.logPaths.append (path)
-	
-	def follow(self, s=1.0):
-		''' Do a tail follow. If a callback function is registered it is called with every new line. 
-		Else printed to standard out.
-
-		Arguments:
-			s - Number of seconds to wait between checking each file'''
-		
-		MINDELAY = 0.01 # wait at least 1/100 second before checking next log
-		secs = max (s, MINDELAY)
-		
-		try:
-			with ExitStack() as stack:
-				#with open(self.tailed_file) as file_:
-				fileList = [stack.enter_context(open(fpath)) for fpath in self.logPaths]
-				for file in fileList:
-					file.seek(0,2)
-				
-				# Go to the end of file
-				while True:
-					time.sleep (secs)
-
-					for (file,log) in zip (fileList, self.logNames):
-						while True:
-							currPosition = file.tell()
-							line = file.readline()
-							if line:
-								self.print_line (log, line)
-							else:
-								break
-		
-		except KeyboardInterrupt:
-			return
-
-	def check_file_validity(self, file_):
-		''' Check whether the a given file exists, readable and is a file '''
-		if not os.access(file_, os.F_OK):
-			raise FileCheckError("File '%s' does not exist" % (file_))
-		if not os.access(file_, os.R_OK):
-			raise FileCheckError("File '%s' not readable" % (file_))
-		if os.path.isdir(file_):
-			raise FileCheckError("File '%s' is a directory" % (file_))
-
-	def print_line(self, logName: str, line: str):
-		"""
-		Print output sent by one or more TailPrint objects. If output transitions to different file,
-		indicate change by printing blank line followed by file path.
-		"""
-		
-		global LAST_LOG_PRINTED
-		
-		# Check that we actually want to print this line.
-		if FILTER_REGEX == None or FILTER_REGEX.search (line):
-			
-			if logName != LAST_LOG_PRINTED:
-				if LAST_LOG_PRINTED != None: print ()
-				# only print prefix line if we have transitioned output from one file to another
-				print ('===', logName)
-				LAST_LOG_PRINTED = logName
-				
-			print (expand_tabs_for_line (logName, line),end='')
-
-# =================
-
-#
 #	p a r s e _ b e g i n _ t i m e
 #
 
@@ -1590,16 +1589,35 @@ def print_db_dirs_info():
 	"""
 	Print the database folder paths extracted from Event.log.
 	"""
-	(defaultPath, securePath, additionalPath1, additionalPath2, remoteContainerPath1, remoteContainerPath2) = get_databases_directories()
+	(defaultPath, securePath, additionalPath1, additionalPath2, remoteContainerPath1, remoteContainerPath2) = get_db_directories()
 	
 	print ()
 	print ('=== DATABASE DIRECTORIES ===')
-	print ('  Default:                ', defaultPath)
-	print ('  Secure:                 ', securePath)
-	print ('  Additional Databases #1:', additionalPath1)
-	print ('  External Container #1:  ', remoteContainerPath1)
-	print ('  Additional Databases #2:', additionalPath2)
-	print ('  External Container #2:  ', remoteContainerPath2)
+
+	with Spinner ('Default:                 '):
+		size = get_folder_size (defaultPath)
+	print ('{:16,}  {}'.format (size, defaultPath))
+
+	with Spinner ('Secure:                  '):
+		size = get_folder_size (securePath)
+	print ('{:16,}  {}'.format (size, securePath))
+
+	with Spinner ('Additional Databases #1: '):
+		size = get_folder_size (additionalPath1)
+	print ('{:16,}  {}'.format (size, additionalPath1))
+
+	with Spinner ('External Container #1:   '):
+		size = get_folder_size (remoteContainerPath1)
+	print ('{:16,}  {}'.format (size, remoteContainerPath1))
+
+	with Spinner ('Additional Databases #2: '):
+		size = get_folder_size (additionalPath2)
+	print ('{:16,}  {}'.format (size, additionalPath2))
+
+	with Spinner ('External Container #2:   '):
+		size = get_folder_size (remoteContainerPath2)
+	print ('{:16,}  {}'.format (get_folder_size (remoteContainerPath2), remoteContainerPath2))
+
 	print ()
 
 
@@ -2032,71 +2050,166 @@ def scan_file_last_match (logPath: str, matchStr: str) -> str:
 		m = re.search (matchStr, line)
 		if m: lastMatch = m.group(1)
 		lineNum += 1
-			
+	
 	return lastMatch
 
 
-def claris_config_remove(targetDir: str) -> bool:
+class Spinner:
+
+	def __init__(self, message, delay=0.1):
+		self.spinner = itertools.cycle(['-', '/', '|', '\\'])
+		self.delay = delay
+		self.busy = False
+		self.spinner_visible = False
+		sys.stdout.write(message)
+
+	def write_next(self):
+		with self._screen_lock:
+			if not self.spinner_visible:
+				sys.stdout.write(next(self.spinner))
+				self.spinner_visible = True
+				sys.stdout.flush()
+
+	def remove_spinner(self, cleanup=False):
+		with self._screen_lock:
+			if self.spinner_visible:
+				sys.stdout.write('\b')
+				self.spinner_visible = False
+				if cleanup:
+					sys.stdout.write(' ')       # overwrite spinner with blank
+					#sys.stdout.write('\r')      # move to next line
+				sys.stdout.flush()
+
+	def spinner_task(self):
+		while self.busy:
+			self.write_next()
+			time.sleep(self.delay)
+			self.remove_spinner()
+
+	def __enter__(self):
+		if sys.stdout.isatty():
+			self._screen_lock = threading.Lock()
+			self.busy = True
+			self.thread = threading.Thread(target=self.spinner_task)
+			self.thread.start()
+
+	def __exit__(self, exc_type, exc_val, exc_traceback):
+		if sys.stdout.isatty():
+			self.busy = False
+			self.remove_spinner(cleanup=True)
+		else:
+			sys.stdout.write('\r')
+
+
+#
+#	s t r i p _ l i n e
+#
+
+def strip_line (logName: str, line: str) -> str:
+	"""
+	When possible, remove repetitive or extraneous text in the logs.
+	This is done after expanding tabs so columns should be at fixed positions.
+	"""
 	
-	"""
-	Remove ClarisConfig.json from target directory.
-	"""
+	if logName in ['access','event']:
+		if line [24] == '-':
+			items = line.split('\t')
+			line = '{:23.23}  {:11}  {:4}  {:<}'.format (items[0], items[1], items[2], items[4])		# remove timezone and hostname
+	if logName == 'admin':
+		if line [20] == '-':
+			line = line [:20] + line [26:]							# remove timezone
+	if logName in ['clientstats','dapi','topcall']:
+			line = line [:23] + line [29]								# remove timezone
+	if logName == 'dapi':
+			line = line [:23] + line [29:45] + line[62:]			# remove timezone & hostname
 
-	configPath = os.path.join(targetDir, "ClarisConfig.json")
-	print ()
+	return line
 
-	try:
-		os.remove(configPath)
-	except FileNotFoundError:
-		print ('No ClarisConfig.json file was found to remove.')
-		print ()
-		return False
-	except PermissionError:
-		print("Error: Could not remove", configPath)
-		print ('Adjust permissions or run fmslogs with elevated privileges.')
-		print ()
-		return False
+
+# =================
+
+class TailPrint (object):
 	
-	print ('The ClarisConfig.json file has been removed.')
-	print ('Restart FMS to apply the change.')
-	print ()
-	return True
-
-
-def claris_config_write(targetDir: str) -> bool:
+	# based on https://github.com/kasun/python-tail
 	
-	"""
-	Write CLARIS_CONFIG text to a ClarisConfig.json file in target directory.
-	If the file already exists, attempt to move it aside (renames with .bak).
-	"""
-
-	configPath = os.path.join(targetDir, "ClarisConfig.json")
-	print ()
-
-	try:
-		try:
-			# If there's an existing config file, attempt to move it aside.
-			backupPath = configPath + ".bak"
-			shutil.move(configPath, backupPath)
-		except FileNotFoundError:
-			pass
-		except FileExistsError:
-			pass
-
-		with open(configPath, "w") as f:
-			f.write(CLARIS_CONFIG)
+	''' Represents a tail command. '''
+	def __init__(self, logNames: list):
+		'''Initiate a Tail instance.
+			Check for file validity, assigns callback function to standard out.
+			Arguments:
+				tailedFiles - List of file to be followed. '''
+				
+		self.logNames = []
+		self.logPaths = []
 		
-		print ('The ClarisConfig.json file has been created.')
-		print ('Restart FMS to apply the change.')
-		print ()
-		return True
-	except PermissionError:
-		print("Error: Could not write to", configPath)
-		print ('Adjust permissions or run fmslogs with elevated privileges.')
-		print ()
-		return False
+		for log in logNames:
+			path = get_log_path (log)
+			self.check_file_validity(path)
+			self.logNames.append (log)
+			self.logPaths.append (path)
 	
-	return True
+	def follow(self, s=1.0):
+		''' Do a tail follow. If a callback function is registered it is called with every new line. 
+		Else printed to standard out.
+
+		Arguments:
+			s - Number of seconds to wait between checking each file'''
+		
+		MINDELAY = 0.01 # wait at least 1/100 second before checking next log
+		secs = max (s, MINDELAY)
+		
+		try:
+			with ExitStack() as stack:
+				#with open(self.tailed_file) as file_:
+				fileList = [stack.enter_context(open(fpath)) for fpath in self.logPaths]
+				for file in fileList:
+					file.seek(0,2)
+				
+				# Go to the end of file
+				while True:
+					time.sleep (secs)
+
+					for (file,log) in zip (fileList, self.logNames):
+						while True:
+							currPosition = file.tell()
+							line = file.readline()
+							if line:
+								self.print_line (log, line)
+							else:
+								break
+		
+		except KeyboardInterrupt:
+			return
+
+	def check_file_validity(self, file_):
+		''' Check whether the a given file exists, readable and is a file '''
+		if not os.access(file_, os.F_OK):
+			raise FileCheckError("File '%s' does not exist" % (file_))
+		if not os.access(file_, os.R_OK):
+			raise FileCheckError("File '%s' not readable" % (file_))
+		if os.path.isdir(file_):
+			raise FileCheckError("File '%s' is a directory" % (file_))
+
+	def print_line(self, logName: str, line: str):
+		"""
+		Print output sent by one or more TailPrint objects. If output transitions to different file,
+		indicate change by printing blank line followed by file path.
+		"""
+		
+		global LAST_LOG_PRINTED
+		
+		# Check that we actually want to print this line.
+		if FILTER_REGEX == None or FILTER_REGEX.search (line):
+			
+			if logName != LAST_LOG_PRINTED:
+				if LAST_LOG_PRINTED != None: print ()
+				# only print prefix line if we have transitioned output from one file to another
+				print ('===', logName)
+				LAST_LOG_PRINTED = logName
+				
+			print (expand_tabs_for_line (logName, line),end='')
+
+# =================
 
 
 #
