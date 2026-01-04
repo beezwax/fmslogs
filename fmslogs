@@ -847,14 +847,14 @@ def convert_filemaker_path (fmPath: str) -> str:
 #	e d i t _ l o g
 #
 
-def edit_log (logName: str):
+def edit_log (log_name: str):
 
 	# TODO: needs Windows version for first & third options
 	# TODO: use vi as second fallback if no nano?
 	# TODO: open in GUI editor if available
 	
 	# Below will return None if syslog or glob can't find file.
-	logPath = get_log_path (logName)
+	logPath = get_log_path (log_name)
 	
 	if logPath:
 		if 'EDITOR' in os.environ:
@@ -873,7 +873,7 @@ def edit_log (logName: str):
 #	e x p a n d _ t a b s _ f o r _ l i n e
 #
 
-def expand_tabs_for_line (logName: str, line: str) -> str:
+def expand_tabs_for_line (log_name: str, line: str) -> str:
 	"""
 	Expands tabs in the string `line` using the given tabstops.
 	`tabstops` can be a list of column positions (e.g., [4, 8, 12]) or a single integer for fixed tab width.
@@ -882,9 +882,9 @@ def expand_tabs_for_line (logName: str, line: str) -> str:
 	
 	try:
 		if SUCCINCT_MODE:
-			tabstops = LOG_SPECS [logName]['shtb']
+			tabstops = LOG_SPECS [log_name]['shtb']
 		else:
-			tabstops = LOG_SPECS [logName]['tbst']
+			tabstops = LOG_SPECS [log_name]['tbst']
 	except KeyError:
 		tabstops = 8
 	
@@ -892,17 +892,17 @@ def expand_tabs_for_line (logName: str, line: str) -> str:
 		# All tab stops are the same size.
 		return line.expandtabs(tabstops)
 
-	if logName in ['admin','adminapi']:
+	if log_name in ['admin','adminapi']:
 		# This log doesn't use tabs, but instead uses 2 or 3 spaces to separate columns.
 		respace = re.compile (r'  +')
 		line = respace.sub ('\t', line)
 	
-	if logName in ['httpaccess','httpsslaccess']:
+	if log_name in ['httpaccess','httpsslaccess']:
 		#                 host   iden user  time    zone  requ  stat  size
 		match = re.match (r'(.*) (.*) (.*) \[(.*) (.*)\] "(.*)" (\d*) (\d*)', line)
 		line = match.group(1) + '\t' + match.group(7) + '\t' + match.group(8) + '\t' + match.group(2) + '\t' + match.group(3) + '\t' + match.group(4) + ' ' + match.group(5) + '\t' + match.group(6) + '\n'
 	
-	if logName in ['httpsslrequest']:
+	if log_name in ['httpsslrequest']:
 		#                   timest zone   host vers ciph oppath len
 		match = re.match (r'\[(.*) (.*)\] (.*) (.*) (.*) "(.*)" (\d*)', line)
 		line = match.group (1) + ' ' + match.group(2) + '\t' + match.group(3) + '\t' + match.group(4) + '\t' + match.group(5) + '\t' + match.group(6) + '\n'
@@ -967,17 +967,17 @@ def get_db_directories() -> tuple:
 	in which case the default path will be None.
 	"""
 	
-	additionalPath1 = None
-	remoteContainerPath1 = None
-	additionalPath2 = None
-	remoteContainerPath2 = None
+	additional_path1 = None
+	remote_container_path1 = None
+	additional_path2 = None
+	remote_container_path2 = None
 
-	defaultPathRE = re.compile (r'Default database location: (file.*)')
-	securePathRE = re.compile (r'Secure database folder enabled: (file.*)')
-	additionalPath1RE = re.compile (r'Additional database folder \[1\] enabled: (file.*)')
-	additionalPath2RE = re.compile (r'Additional database folder \[2\] enabled: (file.*)')
-	remoteContainerPath1RE = re.compile (r'Separate remote container folder \[1\] enabled, .*: (.*)')
-	remoteContainerPath2RE = re.compile (r'Separate remote container folder \[2\] enabled, .*: (.*)')
+	default_pathRE = re.compile (r'Default database location: (file.*)')
+	secure_pathRE = re.compile (r'Secure database folder enabled: (file.*)')
+	additional_path1RE = re.compile (r'Additional database folder \[1\] enabled: (file.*)')
+	additional_path2RE = re.compile (r'Additional database folder \[2\] enabled: (file.*)')
+	remote_container_path1RE = re.compile (r'Separate remote container folder \[1\] enabled, .*: (.*)')
+	remote_container_path2RE = re.compile (r'Separate remote container folder \[2\] enabled, .*: (.*)')
 
 	"""
 	Default database location: filemac:/internal/Library/FileMaker Server/Data/Databases/
@@ -988,34 +988,34 @@ def get_db_directories() -> tuple:
 	Additional database folder [2] disabled.
 	"""
 
-	eventLogPath = get_log_path ('event')
-	defaultPath = scan_file_last_match (eventLogPath, defaultPathRE)
+	event_log_path = get_log_path ('event')
+	default_path = scan_file_last_match (event_log_path, default_pathRE)
 
-	if defaultPath == None:
+	if default_path == None:
 		# Nothing in current log file, see if we can find in -old log.
-		eventLogPath = eventLogPath.replace ('.log', '-old.log')
-		defaultPath = scan_file_last_match (eventLogPath, defaultPathRE)
-	defaultPath = convert_filemaker_path (defaultPath)
+		event_log_path = event_log_path.replace ('.log', '-old.log')
+		default_path = scan_file_last_match (event_log_path, default_pathRE)
+	default_path = convert_filemaker_path (default_path)
 
-	securePath = scan_file_last_match (eventLogPath, securePathRE)
-	securePath = convert_filemaker_path (securePath)
+	secure_path = scan_file_last_match (event_log_path, secure_pathRE)
+	secure_path = convert_filemaker_path (secure_path)
 
 	# These paths are optional.
-	additionalPath1 = scan_file_last_match (eventLogPath, additionalPath1RE)
-	if additionalPath1:
-		additionalPath1 = convert_filemaker_path (additionalPath1)
-		remoteContainerPath1 = scan_file_last_match (eventLogPath, remoteContainerPath1RE)
-		if remoteContainerPath1: remoteContainerPath1 = convert_filemaker_path (remoteContainerPath1)
-		print ('remoteContainerPath1:', remoteContainerPath1)
+	additional_path1 = scan_file_last_match (event_log_path, additional_path1RE)
+	if additional_path1:
+		additional_path1 = convert_filemaker_path (additional_path1)
+		remote_container_path1 = scan_file_last_match (event_log_path, remote_container_path1RE)
+		if remote_container_path1: remote_container_path1 = convert_filemaker_path (remote_container_path1)
+		print ('remote_container_path1:', remote_container_path1)
 
-		additionalPath2 = scan_file_last_match (eventLogPath, additionalPath2RE)
-		if additionalPath2:
-			additionalPath2 = convert_filemaker_path (additionalPath2)
-			remoteContainerPath2 = scan_file_last_match (eventLogPath, remoteContainerPath2RE)
-			if remoteContainerPath2:
-				remoteContainerPath2 = convert_filemaker_path (remoteContainerPath2)
+		additional_path2 = scan_file_last_match (event_log_path, additional_path2RE)
+		if additional_path2:
+			additional_path2 = convert_filemaker_path (additional_path2)
+			remote_container_path2 = scan_file_last_match (event_log_path, remote_container_path2RE)
+			if remote_container_path2:
+				remote_container_path2 = convert_filemaker_path (remote_container_path2)
 			
-	return (defaultPath, securePath, additionalPath1, additionalPath2, remoteContainerPath1, remoteContainerPath2)
+	return (default_path, secure_path, additional_path1, additional_path2, remote_container_path1, remote_container_path2)
 
 
 def follow_file(some_file):
@@ -1534,15 +1534,15 @@ def parse_begin_time (timeStr: str) -> datetime.datetime:
 #	p r i n t _ l o g
 #
 
-def print_log (logName: str, count: int):
+def print_log (log_name: str, count: int):
 
 	linesPrinted = -1
 	
 	if OUTPUT_MODE is OutputMode.TAIL:
-		linesPrinted = print_tail (logName, count, SHOW_HEADERS, SUCCINCT_MODE)
+		linesPrinted = print_tail (log_name, count, SHOW_HEADERS, SUCCINCT_MODE)
 	
 	elif OUTPUT_MODE is OutputMode.HEAD:
-		linesPrinted = print_head (logName, count, SHOW_HEADERS, SUCCINCT_MODE)
+		linesPrinted = print_head (log_name, count, SHOW_HEADERS, SUCCINCT_MODE)
 	else:
 		print ('Error: unknown output mode')
 	
@@ -1608,26 +1608,26 @@ def print_db_dirs_info():
 	"""
 	RCDIR = 'RC_Data_FMS'
 
-	(defaultPath, securePath, additionalPath1, additionalPath2, remoteContainerPath1, remoteContainerPath2) = get_db_directories()
+	(default_path, secure_path, additional_path1, additional_path2, remote_container_path1, remote_container_path2) = get_db_directories()
 	
 	print ()
 	print ('=== DATABASE DIRECTORIES ===')
 
 	# DEFAULT
-	dbSize = get_folder_size (defaultPath, excludeDir=RCDIR)
-	print ('Default:                  {:16,}  {}'.format (dbSize, defaultPath))
+	dbSize = get_folder_size (default_path, excludeDir=RCDIR)
+	print ('Default:                  {:16,}  {}'.format (dbSize, default_path))
 
 	with Spinner ('  ' + RCDIR + ':           '):
-		rcPath = os.path.join (defaultPath, RCDIR)
+		rcPath = os.path.join (default_path, RCDIR)
 		rcSize = get_folder_size (rcPath)
 	print ('{:16,}  {}'.format (rcSize, rcPath))
 
 	# SECURE
-	size = get_folder_size (securePath)
-	print ('Secure:                   {:16,}  {}'.format (size, securePath))
+	size = get_folder_size (secure_path)
+	print ('Secure:                   {:16,}  {}'.format (size, secure_path))
 
 	with Spinner ('  ' + RCDIR + ':           '):
-		rcPath = os.path.join (securePath, RCDIR)
+		rcPath = os.path.join (secure_path, RCDIR)
 		rcSize = get_folder_size (rcPath)
 	if rcSize >= 0:
 		print ('{:16,}  {}'.format (rcSize, rcPath))
@@ -1635,12 +1635,12 @@ def print_db_dirs_info():
 		print ('{:>16}  {}'.format ('-', '-'))
 
 	# ADDITIONAL 1
-	if additionalPath1:
-		size = get_folder_size (additionalPath1, RCDIR)
-		print ('Additional Databases #1:  {:16,}  {}'.format (size, additionalPath1))
+	if additional_path1:
+		size = get_folder_size (additional_path1, RCDIR)
+		print ('Additional Databases #1:  {:16,}  {}'.format (size, additional_path1))
 
 		with Spinner ('  ' + RCDIR + ':           '):
-			rcPath = os.path.join (additionalPath1, RCDIR)
+			rcPath = os.path.join (additional_path1, RCDIR)
 			rcSize = get_folder_size (rcPath)
 		if rcSize >= 0:
 			print ('{:16,}  {}'.format (rcSize, rcPath))
@@ -1648,19 +1648,19 @@ def print_db_dirs_info():
 			print ('{:>16}  {}'.format ('-', '-'))
 
 		with Spinner ('  External Container #1: '):
-			rcSize = get_folder_size (remoteContainerPath1)
+			rcSize = get_folder_size (remote_container_path1)
 		if True: # rcSize >= 0:
-			print ('{:16,}  {}'.format (rcSize, remoteContainerPath1))
+			print ('{:16,}  {}'.format (rcSize, remote_container_path1))
 		else:
 			print ('{:>16}  {}'.format ('-', '-'))
 	
 	# ADDITIONAL 2
-	if additionalPath2:
-		size = get_folder_size (additionalPath2, RCDIR)
-		print ('Additional Databases #2:  {:16,}  {}'.format (size, additionalPath2))
+	if additional_path2:
+		size = get_folder_size (additional_path2, RCDIR)
+		print ('Additional Databases #2:  {:16,}  {}'.format (size, additional_path2))
 
 		with Spinner ('  ' + RCDIR + ':           '):
-			rcPath = os.path.join (additionalPath2, RCDIR)
+			rcPath = os.path.join (additional_path2, RCDIR)
 			rcSize = get_folder_size (rcPath)
 		if rcSize >= 0:
 			print ('{:16,}  {}'.format (rcSize, rcPath))
@@ -1668,8 +1668,8 @@ def print_db_dirs_info():
 			print ('{:16}  {}'.format ('-', '-'))
 
 		with Spinner ('  External Container #2: '):
-			size = get_folder_size (remoteContainerPath2)
-		print ('{:16,}  {}'.format (get_folder_size (remoteContainerPath2), remoteContainerPath2))
+			size = get_folder_size (remote_container_path2)
+		print ('{:16,}  {}'.format (get_folder_size (remote_container_path2), remote_container_path2))
 
 	print ()
 
@@ -1678,16 +1678,16 @@ def print_db_dirs_info():
 #	p r i n t _ l o g _ h e a d e r
 #
 
-def print_log_header (logName:str, succinct: bool) -> int:
+def print_log_header (log_name:str, succinct: bool) -> int:
 
 	headerStr = None
 	lineCount = 0
 
 	try:
-		if succinct and 'shed' in LOG_SPECS[logName]:
-			headerStr = LOG_SPECS [logName]['shed']
+		if succinct and 'shed' in LOG_SPECS[log_name]:
+			headerStr = LOG_SPECS [log_name]['shed']
 		else:
-			headerStr = LOG_SPECS [logName]['head']
+			headerStr = LOG_SPECS [log_name]['head']
 	except:
 		pass
 
@@ -1731,15 +1731,15 @@ def print_file_head_faster (filePath: str, lines: int) -> bool:
 #   p r i n t _ f i l e _ h e a d
 #
 
-def print_file_head (logName:str, lines:int) -> bool:
+def print_file_head (log_name:str, lines:int) -> bool:
     
-	filePath = LOG_SPECS [logName]['path']
+	filePath = LOG_SPECS [log_name]['path']
 	lineCount = 0
 
 	try:
 		with open(filePath, "r+b") as f:
 			m=mmap.mmap(f.fileno(), 0, prot=mmap.PROT_READ)
-			print_log_header (logName)
+			print_log_header (log_name)
 			while True:
 				line=m.readline()
 				if line == '': break
@@ -1756,11 +1756,11 @@ def print_file_head (logName:str, lines:int) -> bool:
 #   p r i n t _ h e a d
 #
 
-def print_head (logName: str, count: int, header: bool, succinct: bool) -> bool:
+def print_head (log_name: str, count: int, header: bool, succinct: bool) -> bool:
     
 	lineList = []
 	lineCounter = count
-	logPath =  get_log_path (logName)
+	logPath =  get_log_path (log_name)
 
 	try:
 		check_file_validity (logPath)
@@ -1772,7 +1772,7 @@ def print_head (logName: str, count: int, header: bool, succinct: bool) -> bool:
 	# that is on or after our start date.
 	
 	if header:
-		headerCount = print_log_header(logName, succinct)
+		headerCount = print_log_header(log_name, succinct)
 		lineCounter -= headerCount
 	else:
 		headerCount = 0
@@ -1780,7 +1780,7 @@ def print_head (logName: str, count: int, header: bool, succinct: bool) -> bool:
 	if TIMESTAMP_START != None:
 		lineNum = find_first_timestamp (logPath, TIMESTAMP_START)
 	else:
-		if LOG_SPECS[logName]['lghd']:
+		if LOG_SPECS[log_name]['lghd']:
 			lineNum = 2		# skip the column header row
 		else:
 			lineNum = 1
@@ -1800,10 +1800,10 @@ def print_head (logName: str, count: int, header: bool, succinct: bool) -> bool:
 			lineNum += 1
 	
 	if lineList != None and len (lineList) == 0:
-		print ('<' + logName + ' has no messages>')
+		print ('<' + log_name + ' has no messages>')
 
 	for lineNum in lineList:
-		print (expand_tabs_for_line (logName, linecache.getline (logPath, lineNum)),end='')
+		print (expand_tabs_for_line (log_name, linecache.getline (logPath, lineNum)),end='')
 			
 	return len (lineList) + headerCount
 
@@ -1904,7 +1904,7 @@ def print_certificate_info (name: str, host: str, port=443) -> bool:
 #	p r i n t _ t a i l
 #
 
-def print_tail (logName: str, count: int, header: bool, succinct: bool) -> int:
+def print_tail (log_name: str, count: int, header: bool, succinct: bool) -> int:
 
 	"""
 	Print up to 'count' number of lines of text from the end of the file at path.
@@ -1916,7 +1916,7 @@ def print_tail (logName: str, count: int, header: bool, succinct: bool) -> int:
 	lineList = []
 	lineCount = count
 	
-	logPath =  get_log_path (logName)
+	logPath =  get_log_path (log_name)
 	
 	try:
 		check_file_validity (logPath)
@@ -1926,7 +1926,7 @@ def print_tail (logName: str, count: int, header: bool, succinct: bool) -> int:
 	
 	# TODO: only print headers if there's log output
 	if header:
-		headerCount = print_log_header (logName, succinct)
+		headerCount = print_log_header (log_name, succinct)
 		lineCount = lineCount - headerCount
 	else:
 		headerCount = 0
@@ -1951,15 +1951,15 @@ def print_tail (logName: str, count: int, header: bool, succinct: bool) -> int:
 	lineCount = len (lineList)
 	
 	if lineCount > 0:
-		if LOG_SPECS[logName]['lghd'] and lineList[0] == 1:
+		if LOG_SPECS[log_name]['lghd'] and lineList[0] == 1:
 			# Remove the header line, we'll be using our own
 			del lineList[0]
 
-	if succinct and 'shtb' in LOG_SPECS[logName].keys():
+	if succinct and 'shtb' in LOG_SPECS[log_name].keys():
 		for lineNum in lineList:
-			line = strip_line (logName, linecache.getline (logPath, lineNum))
+			line = strip_line (log_name, linecache.getline (logPath, lineNum))
 			try:
-				print (expand_tabs_for_line (logName, line), end='')
+				print (expand_tabs_for_line (log_name, line), end='')
 			except BrokenPipeError:
 				# Catch errors if output is piped and the other end closes prematurely (eg, using `head`).
 				# Use below to avoid a later error when Python flushes stdout
@@ -1969,11 +1969,11 @@ def print_tail (logName: str, count: int, header: bool, succinct: bool) -> int:
 				break
 
 	else:
-		tabstops =  LOG_SPECS [logName]['tbst']
+		tabstops =  LOG_SPECS [log_name]['tbst']
 		
 		for lineNum in lineList:
 			try:
-				print (expand_tabs_for_line (logName, linecache.getline (logPath, lineNum)),end='')
+				print (expand_tabs_for_line (log_name, linecache.getline (logPath, lineNum)),end='')
 			except BrokenPipeError:
 				devnull = os.open(os.devnull, os.O_WRONLY)
 				os.dup2(devnull, sys.stdout.fileno())
@@ -2158,22 +2158,22 @@ class Spinner:
 #	s t r i p _ l i n e
 #
 
-def strip_line (logName: str, line: str) -> str:
+def strip_line (log_name: str, line: str) -> str:
 	"""
 	When possible, remove repetitive or extraneous text in the logs.
 	This is done after expanding tabs so columns should be at fixed positions.
 	"""
 	
-	if logName in ['access','event']:
+	if log_name in ['access','event']:
 		if line [24] == '-':
 			items = line.split('\t')
 			line = '{:23.23}  {:11}  {:4}  {:<}'.format (items[0], items[1], items[2], items[4])		# remove timezone and hostname
-	if logName == 'admin':
+	if log_name == 'admin':
 		if line [20] == '-':
 			line = line [:20] + line [26:]							# remove timezone
-	if logName in ['clientstats','dapi','topcall']:
+	if log_name in ['clientstats','dapi','topcall']:
 			line = line [:23] + line [29]								# remove timezone
-	if logName == 'dapi':
+	if log_name == 'dapi':
 			line = line [:23] + line [29:45] + line[62:]			# remove timezone & hostname
 
 	return line
@@ -2186,19 +2186,19 @@ class TailPrint (object):
 	# based on https://github.com/kasun/python-tail
 	
 	''' Represents a tail command. '''
-	def __init__(self, logNames: list):
+	def __init__(self, log_names: list):
 		'''Initiate a Tail instance.
 			Check for file validity, assigns callback function to standard out.
 			Arguments:
 				tailedFiles - List of file to be followed. '''
 				
-		self.logNames = []
+		self.log_names = []
 		self.logPaths = []
 		
-		for log in logNames:
+		for log in log_names:
 			path = get_log_path (log)
 			self.check_file_validity(path)
-			self.logNames.append (log)
+			self.log_names.append (log)
 			self.logPaths.append (path)
 	
 	def follow(self, s=1.0):
@@ -2222,7 +2222,7 @@ class TailPrint (object):
 				while True:
 					time.sleep (secs)
 
-					for (file,log) in zip (fileList, self.logNames):
+					for (file,log) in zip (fileList, self.log_names):
 						while True:
 							currPosition = file.tell()
 							line = file.readline()
@@ -2243,7 +2243,7 @@ class TailPrint (object):
 		if os.path.isdir(file_):
 			raise FileCheckError("File '%s' is a directory" % (file_))
 
-	def print_line(self, logName: str, line: str):
+	def print_line(self, log_name: str, line: str):
 		"""
 		Print output sent by one or more TailPrint objects. If output transitions to different file,
 		indicate change by printing blank line followed by file path.
@@ -2254,15 +2254,50 @@ class TailPrint (object):
 		# Check that we actually want to print this line.
 		if FILTER_REGEX == None or FILTER_REGEX.search (line):
 			
-			if logName != LAST_LOG_PRINTED:
+			if log_name != LAST_LOG_PRINTED:
 				if LAST_LOG_PRINTED != None: print ()
 				# only print prefix line if we have transitioned output from one file to another
-				print ('===', logName)
-				LAST_LOG_PRINTED = logName
+				print ('===', log_name)
+				LAST_LOG_PRINTED = log_name
 				
-			print (expand_tabs_for_line (logName, line),end='')
+			print (expand_tabs_for_line (log_name, line),end='')
 
 # =================
+
+
+def handle_named_options (args) -> bool:
+	
+	ignore_positionals = False
+	
+	if args.check_connectivity:
+		check_connectivity()
+		ignore_positionals = True
+	
+	if args.databases:
+		print_db_dirs_info()
+		ignore_positionals = True
+
+	if args.list:
+		print_log_info()
+		ignore_positionals = True
+	
+	if args.network:
+		print_net_status()
+		ignore_positionals = True
+	
+	if args.process_info:
+		process_info()
+		ignore_positionals = True
+		
+	if args.set:
+		handle_set (args.set[0], args.set[1])
+		ignore_positionals = True
+		
+	if args.version:
+		print_version()
+		ignore_positionals = True
+
+	return ignore_positionals
 
 
 #
@@ -2274,44 +2309,12 @@ def main():
 	
 	parser = init_parser()
 	args = parser.parse_args()
-	ignorePositionals = False
 	screenLinesCounter = 0					# if used, will start (num lines on screen * num screens) - space for prompt line
 
-	#print(args.count, args.verbose)
-	#print (args)
-	#init_curses()
-
 	while True:
-		if args.check_connectivity:
-			check_connectivity()
-			ignorePositionals = True
+		ignore_positionals = handle_named_options (args)
 		
-		if args.databases:
-			print_db_dirs_info()
-			ignorePositionals = True
-			break
-
-		if args.list:
-			print_log_info()
-			ignorePositionals = True
-
-		if args.process_info:
-			process_info()
-			ignorePositionals = True
-			
-		if args.set:
-			# Do first in case enabling a log
-			#print (args.set)
-			handle_set (args.set[0], args.set[1])
-			ignorePositionals = True
-			break
-			
-		if args.version:
-			print_version()
-			ignorePositionals = True
-			break
-		
-		if ignorePositionals: break	# only follow through if not limiting output to the above options
+		if ignore_positionals: break	# only follow through if not limiting output to the above options
 		
 		if args.begin:
 			#print (args.begin[0])
@@ -2320,10 +2323,6 @@ def main():
 		if args.edit:
 			edit_log (args.edit[0])
 		
-		if args.network:
-			print_net_status()
-			break
-			
 		if args.head:
 			OUTPUT_MODE = OutputMode.HEAD
 		
@@ -2353,9 +2352,9 @@ def main():
 			break
 
 		# Couldn't use choices=ALL_CHOICES in argparse, so must check names manually.
-		for logName in args.logs:
-				if logName not in ALL_CHOICES:
-					print ('Error:', logName,'not a valid log name')
+		for log_name in args.logs:
+				if log_name not in ALL_CHOICES:
+					print ('Error:', log_name,'not a valid log name')
 					sys.exit (1)
 		
 		# TAILING/FOLLOWING LOGS
@@ -2363,7 +2362,7 @@ def main():
 		if (type (args.tail) == bool and args.tail) or (type (args.tail) == list and args.tail[0] > 0):
 			# Instead of printing the current tail or head, wait for new messages
 			tailer = TailPrint (args.logs)
-			if type (args.tail) == list:
+			if isinstance (args.tail) == list:
 				tailer.follow(args.tail[0])
 			else:
 				tailer.follow(1.0)
@@ -2380,11 +2379,11 @@ def main():
 
 		#print (logLinesCountVal, linesPerLog, screenLinesCounter)
 
-		for logName in args.logs:
-			if logName == lastLog and numMode == 's':
+		for log_name in args.logs:
+			if log_name == lastLog and numMode == 's':
 				linesPerLog = screenLinesCounter			# Use whatever is left for last log (eg, there may be a remainder)
 
-			linesPrinted = print_log (logName, linesPerLog)
+			linesPrinted = print_log (log_name, linesPerLog)
 
 			if linesPrinted < 0: break # error occured
 			
