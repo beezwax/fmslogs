@@ -25,13 +25,11 @@ POSSIBLE NEW OPTIONS
 	remote/external log source via SSH
 	for succinct mode, change 'Information' to 'Info' and 'Warning' to 'Warn' (Error will then be longest)
 
-Reset repo:  git fetch origin main; git reset --hard origin/main
+EXAMPLES OF UNIMPLEMENTED USAGE
+fmslogs --ssh simon@server.beezwax.net access  # if using user's default 'SSH key
+fmslogs -s enable topcall  # enable TopCall.log
 
-fmslogs -h access event
-fmslogs -h -n 100 access event
-fmslogs --ssh simon@server.beezwax.net access # using user's default 'SSH key
-fmslogs -s topcall 1 # enable TopCall.log
-open either directory or log file in text editor, eg $EDITOR
+Reset repo:  git fetch origin main; git reset --hard origin/main
 """
 
 VERSION = "0.29 - 2026-01-03"
@@ -940,14 +938,22 @@ def expand_tabs_for_line (logName: str, line: str) -> str:
 #	g e t _ f o l d e r _ s i z e
 #
 
-def get_folder_size(path='.') -> int:
+def get_folder_size(path='.', excludeDir=None) -> int:
+
 	total = 0
 	if path != None:
-		for entry in os.scandir(path):
-			if entry.is_file():
-				total += entry.stat().st_size
-			elif entry.is_dir():
-				total += get_folder_size(entry.path)
+		try:
+			for entry in os.scandir(path):
+				if entry.is_file():
+					total += entry.stat().st_size
+				elif entry.is_dir():
+					if entry.name != excludeDir:
+						total += get_folder_size(entry.path, excludeDir=excludeDir)
+		except PermissionError:
+			print ('Error: Permission denied for', path)
+		except FileNotFoundError:
+			return -1
+
 	return total
 
 
@@ -1589,34 +1595,70 @@ def print_db_dirs_info():
 	"""
 	Print the database folder paths extracted from Event.log.
 	"""
+	RCDIR = 'RC_Data_FMS'
+
 	(defaultPath, securePath, additionalPath1, additionalPath2, remoteContainerPath1, remoteContainerPath2) = get_db_directories()
 	
 	print ()
 	print ('=== DATABASE DIRECTORIES ===')
 
-	with Spinner ('Default:                 '):
-		size = get_folder_size (defaultPath)
-	print ('{:16,}  {}'.format (size, defaultPath))
+	# DEFAULT
+	dbSize = get_folder_size (defaultPath, excludeDir=RCDIR)
+	print ('Default:                  {:16,}  {}'.format (dbSize, defaultPath))
 
-	with Spinner ('Secure:                  '):
-		size = get_folder_size (securePath)
-	print ('{:16,}  {}'.format (size, securePath))
+	with Spinner ('  ' + RCDIR + ':           '):
+		rcPath = os.path.join (defaultPath, RCDIR)
+		rcSize = get_folder_size (rcPath)
+	print ('{:16,}  {}'.format (rcSize, rcPath))
 
-	with Spinner ('Additional Databases #1: '):
-		size = get_folder_size (additionalPath1)
-	print ('{:16,}  {}'.format (size, additionalPath1))
+	# SECURE
+	size = get_folder_size (securePath)
+	print ('Secure:                   {:16,}  {}'.format (size, securePath))
 
-	with Spinner ('External Container #1:   '):
-		size = get_folder_size (remoteContainerPath1)
-	print ('{:16,}  {}'.format (size, remoteContainerPath1))
+	with Spinner ('  ' + RCDIR + ':           '):
+		rcPath = os.path.join (securePath, RCDIR)
+		rcSize = get_folder_size (rcPath)
+	if rcSize >= 0:
+		print ('{:16,}  {}'.format (rcSize, rcPath))
+	else:
+		print ('{:>16}  {}'.format ('-', '-'))
 
-	with Spinner ('Additional Databases #2: '):
-		size = get_folder_size (additionalPath2)
-	print ('{:16,}  {}'.format (size, additionalPath2))
+	# ADDITIONAL 1
+	if additionalPath1:
+		size = get_folder_size (additionalPath1, RCDIR)
+		print ('Additional Databases #1:  {:16,}  {}'.format (size, additionalPath1))
 
-	with Spinner ('External Container #2:   '):
-		size = get_folder_size (remoteContainerPath2)
-	print ('{:16,}  {}'.format (get_folder_size (remoteContainerPath2), remoteContainerPath2))
+		with Spinner ('  ' + RCDIR + ':           '):
+			rcPath = os.path.join (additionalPath1, RCDIR)
+			rcSize = get_folder_size (rcPath)
+		if rcSize >= 0:
+			print ('{:16,}  {}'.format (rcSize, rcPath))
+		else:
+			print ('{:>16}  {}'.format ('-', '-'))
+
+		with Spinner ('  External Container #1: '):
+			size = get_folder_size (remoteContainerPath1)
+		if rcSize >= 0:
+			print ('{:16,}  {}'.format (rcSize, rcPath))
+		else:
+			print ('{:>16}  {}'.format ('-', '-'))
+	
+	# ADDITIONAL 2
+	if additionalPath2:
+		size = get_folder_size (additionalPath2, RCDIR)
+		print ('Additional Databases #2:  {:16,}  {}'.format (size, additionalPath2))
+
+		with Spinner ('  ' + RCDIR + ':           '):
+			rcPath = os.path.join (additionalPath2, RCDIR)
+			rcSize = get_folder_size (rcPath)
+		if rcSize >= 0:
+			print ('{:16,}  {}'.format (rcSize, rcPath))
+		else:
+			print ('{:16}  {}'.format ('-', '-'))
+
+		with Spinner ('  External Container #2: '):
+			size = get_folder_size (remoteContainerPath2)
+		print ('{:16,}  {}'.format (get_folder_size (remoteContainerPath2), remoteContainerPath2))
 
 	print ()
 
