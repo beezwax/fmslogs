@@ -113,7 +113,7 @@ Verify basic connectivity to various server components, and display SSL TLS vers
 external connections are routed via a reverse proxy through the web server. Also see the related -N/--network option.
 
 ### -d, --databases
-Using values based on the last relevant message in the Event log, display the current database directories being used, including
+Using values based on the last relevant message in the Event log, display the current database directories being used and their sizes, splitting out any
 optional external container directories.
 
 ### -e, --edit

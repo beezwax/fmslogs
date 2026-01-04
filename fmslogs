@@ -965,6 +965,11 @@ def get_db_directories() -> tuple:
 	in which case the default path will be None.
 	"""
 	
+	additionalPath1 = None
+	remoteContainerPath1 = None
+	additionalPath2 = None
+	remoteContainerPath2 = None
+
 	defaultPathRE = re.compile (r'Default database location: (file.*)')
 	securePathRE = re.compile (r'Secure database folder enabled: (file.*)')
 	additionalPath1RE = re.compile (r'Additional database folder \[1\] enabled: (file.*)')
@@ -995,17 +1000,19 @@ def get_db_directories() -> tuple:
 
 	# These paths are optional.
 	additionalPath1 = scan_file_last_match (eventLogPath, additionalPath1RE)
-	if additionalPath1: additionalPath1 = convert_filemaker_path (additionalPath1)
-	additionalPath2 = scan_file_last_match (eventLogPath, additionalPath2RE)
-	if additionalPath2: additionalPath2 = convert_filemaker_path (additionalPath2)
-	remoteContainerPath1 = scan_file_last_match (eventLogPath, remoteContainerPath1RE)
-	if remoteContainerPath1:
-		remoteContainerPath1 = convert_filemaker_path (remoteContainerPath1)
-		remoteContainerPath2 = scan_file_last_match (eventLogPath, remoteContainerPath2RE)
-		if remoteContainerPath2: remoteContainerPath2 = convert_filemaker_path (remoteContainerPath2)
-	else:
-		remoteContainerPath2 = None
+	if additionalPath1:
+		additionalPath1 = convert_filemaker_path (additionalPath1)
+		remoteContainerPath1 = scan_file_last_match (eventLogPath, remoteContainerPath1RE)
+		if remoteContainerPath1: remoteContainerPath1 = convert_filemaker_path (remoteContainerPath1)
+		print ('remoteContainerPath1:', remoteContainerPath1)
 
+		additionalPath2 = scan_file_last_match (eventLogPath, additionalPath2RE)
+		if additionalPath2:
+			additionalPath2 = convert_filemaker_path (additionalPath2)
+			remoteContainerPath2 = scan_file_last_match (eventLogPath, remoteContainerPath2RE)
+			if remoteContainerPath2:
+				remoteContainerPath2 = convert_filemaker_path (remoteContainerPath2)
+			
 	return (defaultPath, securePath, additionalPath1, additionalPath2, remoteContainerPath1, remoteContainerPath2)
 
 
@@ -1637,9 +1644,9 @@ def print_db_dirs_info():
 			print ('{:>16}  {}'.format ('-', '-'))
 
 		with Spinner ('  External Container #1: '):
-			size = get_folder_size (remoteContainerPath1)
-		if rcSize >= 0:
-			print ('{:16,}  {}'.format (rcSize, rcPath))
+			rcSize = get_folder_size (remoteContainerPath1)
+		if True: # rcSize >= 0:
+			print ('{:16,}  {}'.format (rcSize, remoteContainerPath1))
 		else:
 			print ('{:>16}  {}'.format ('-', '-'))
 	
