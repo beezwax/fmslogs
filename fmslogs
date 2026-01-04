@@ -8,9 +8,11 @@ Version: 0.29, 2026-01-03
 Purpose: Display FileMaker Server logs and change logging options.
 """
 
-import argparse, curses, datetime, glob, http.client, itertools, linecache, os, pathlib, platform, pprint
-import re, shutil, socket, subprocess, socket, sys, tempfile, textwrap, threading, time, ssl, urllib.request
-from collections import OrderedDict
+import argparse, curses, datetime
+import glob, http.client, itertools
+import linecache, os, pathlib, platform, pprint
+import re, shutil, socket, subprocess, socket, sys
+import tempfile, textwrap, threading, time, ssl, urllib.request
 from enum import Enum
 from contextlib import ExitStack
 
@@ -54,7 +56,7 @@ except OSError:
 	# Probably being piped so no terminal
 	SCREENCOLS = 255
 	SCREENROWS = 48
-	
+
 MAXREADLEN = 1048576*10
 
 # Default deployment paths (Windows paths will have forward slashes converted)
@@ -1270,7 +1272,7 @@ def list_active_ports() -> list:
 	'''
 	List the open (listening or established) ports for processes using the fmserver user.
 	'''
-		
+	
 	currPlatform = platform.system()
 	openList = []
 	
@@ -1339,7 +1341,6 @@ def print_ssl_options_crypto (name: str, host: str, port=443) -> bool:
 		returnFlag = True
 		print('   Security Protocol:', ssock.version())
 		cert_der = ssock.getpeercert(binary_form=True)
-		print (type (cert_der))
 		print (cert_der,'\n')
 		cert = x509.load_der_x509_certificate(cert_der, default_backend())
 		print ('  ', cert)
@@ -1351,6 +1352,10 @@ def print_ssl_options_crypto (name: str, host: str, port=443) -> bool:
 	return returnFlag
 
 
+#
+#	p r o c e s s _ i n f o
+#
+
 def process_info ():
 	"""
 	Print the FMS related processes and their stats.
@@ -1359,13 +1364,13 @@ def process_info ():
 	print ()
 	
 	if platform.system() == 'Darwin':
-		psResult = subprocess.run(['ps', '-u', 'fmserver', '-o', 'pid,%cpu,rss,stime,time,majflt,stat,comm'], capture_output=True, text=True).stdout.split('\n')
+		ps_result = subprocess.run(['ps', '-u', 'fmserver', '-o', 'pid,%cpu,rss,stime,time,majflt,stat,comm'], capture_output=True, text=True).stdout.split('\n')
 	elif platform.system() == 'Linux':
-		psResult = subprocess.run(['ps', '-u', 'fmserver', '-o', 'pid,%cpu,rss,stime,times,maj_flt,stat,comm'], capture_output=True, text=True).stdout.split('\n')
+		ps_result = subprocess.run(['ps', '-u', 'fmserver', '-o', 'pid,%cpu,rss,stime,times,maj_flt,stat,comm'], capture_output=True, text=True).stdout.split('\n')
 	else:
-		psResult = ['not implemented'] # Windows
+		ps_result = ['not implemented'] # Windows
 	
-	for proc in psResult:
+	for proc in ps_result:
 		print (proc)
 
 
@@ -1373,57 +1378,57 @@ def process_info ():
 #	r e a d _ t a i l
 #
 
-def read_tail (filePath: str, linesFromEnd: int) -> list:
+def read_tail (file_path: str, lines_from_end: int) -> list:
 	"""
 	Scan lines in file, return up to linesFromEnd line numbers from the end of file.
 	Line numbers are base 1 for use with linecache.getline.
 	"""
 	
-	check_file_validity (filePath)
-	lineNum = 1
+	check_file_validity (file_path)
+	line_num = 1
 	matching = []
 	
 	while True:
-		line = linecache.getline (filePath, lineNum)
+		line = linecache.getline (file_path, line_num)
 		if line == '': break
-		matching.append (lineNum)
-		lineNum += 1
+		matching.append (line_num)
+		line_num += 1
 	
 	#print ('lineNum:',lineNum, 'matching:',len (matching))
-	return matching [-linesFromEnd:]
+	return matching [-lines_from_end:]
 
 
 #
 #	r e a d _ t a i l _ f i l t e r e d
 #
 
-def read_tail_filtered (filePath: str, linesFromEnd: int) -> list:
+def read_tail_filtered (file_path: str, lines_from_end: int) -> list:
 	"""
 	Search file for any matching lines, return up to linesFromEnd
 	line numbers from the end of file that match. Line numbers are base 1
 	for use with linecache.getline.
 	"""
 	
-	check_file_validity (filePath)
+	check_file_validity (file_path)
 	
 	matching = []
-	lineNum = 1
+	line_num = 1
 	while True:
-		line = linecache.getline (filePath, lineNum)
+		line = linecache.getline (file_path, line_num)
 		if line == '': break
 		if FILTER_REGEX.search (line):
-			matching.append (lineNum)
+			matching.append (line_num)
 		
-		lineNum += 1
+		line_num += 1
 		
-	return matching [-linesFromEnd:]
-		
+	return matching [-lines_from_end:]
+
 
 #
 #	r e a d _ t a i l _ f i l t e r _ a n d _ t i m e
 #
 
-def read_tail_filtered_and_time (filePath: str, linesFromEnd: int) -> list:
+def read_tail_filtered_and_time (file_path: str, lines_from_end: int) -> list:
 	"""
 	Search file for any matching lines that are on or after the matching timestamp.
 	From there, then return line numbers from the end of file that match the text filter.
@@ -1432,26 +1437,25 @@ def read_tail_filtered_and_time (filePath: str, linesFromEnd: int) -> list:
 	
 	check_file_validity (filePath)
 	matching = []
-	lastTimeLine = -1
 	
 	# First, find the first line containing some kind of message date
 	# that is on or after our start date.
 	
-	lineNum = find_first_timestamp (filePath, TIMESTAMP_START)
+	line_num = find_first_timestamp (filePath, TIMESTAMP_START)
 	
-	if lineNum > 0:
+	if line_num > 0:
 		# Now, filter anything after start date.
 		while True:
-			line = linecache.getline (filePath, lineNum)
+			line = linecache.getline (file_path, line_num)
 
 			if line == '': break
 
 			if FILTER_REGEX.search (line):
-				matching.append (lineNum)
-			lineNum += 1
+				matching.append (line_num)
+			line_num += 1
 	
 	# Cut result down to no more than requested lines from end of file.
-	return matching [-linesFromEnd:]
+	return matching [-lines_from_end:]
 
 
 #
@@ -1901,7 +1905,7 @@ def print_certificate_info (name: str, host: str, port=443) -> bool:
 #
 
 def print_tail (logName: str, count: int, header: bool, succinct: bool) -> int:
-    
+
 	"""
 	Print up to 'count' number of lines of text from the end of the file at path.
 	Result is False if there was an error opening or reading the file.
