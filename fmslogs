@@ -835,7 +835,7 @@ def convert_filemaker_path (fmPath: str) -> str:
 	if fmPath.startswith ('filemac:/'):
 		return fmPath.replace ('filemac:/', '/Volumes/')
 	elif fmPath.startswith ('filelinux:/'):
-		return fmPath.replace ('filelinux:/', '/opt/FileMaker/')
+		return fmPath.replace ('filelinux:/', '/')
 	elif fmPath.startswith ('filewin:/'):
 		winPath = fmPath.replace ('filewin:/', '')
 		winPath = winPath.replace ('/', '\\')
@@ -963,8 +963,8 @@ def get_db_directories() -> tuple:
 	securePathRE = re.compile (r'Secure database folder enabled: (file.*)')
 	additionalPath1RE = re.compile (r'Additional database folder \[1\] enabled: (file.*)')
 	additionalPath2RE = re.compile (r'Additional database folder \[2\] enabled: (file.*)')
-	remoteContainerPath1RE = re.compile (r'Separate remote container folder \[1\] enabled, (.*)')
-	remoteContainerPath2RE = re.compile (r'Separate remote container folder \[2\] enabled, (.*)')
+	remoteContainerPath1RE = re.compile (r'Separate remote container folder \[1\] enabled, .*: (.*)')
+	remoteContainerPath2RE = re.compile (r'Separate remote container folder \[2\] enabled, .*: (.*)')
 
 	"""
 	Default database location: filemac:/internal/Library/FileMaker Server/Data/Databases/
