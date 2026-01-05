@@ -513,11 +513,11 @@ def calc_row_metrics (numLogs, logLinesCountVal) -> tuple:
 	"""
 	
 	screenLinesCount = 0
-	numMode = None
+	num_mode = None
 
 	if logLinesCountVal.count ('s'):
 		screensNumStr = logLinesCountVal.replace('s','')
-		numMode = 's'
+		num_mode = 's'
 					
 		if len (screensNumStr) == 0:
 			screensNum = 1		# just an 's' by itself counts as 1'
@@ -530,18 +530,18 @@ def calc_row_metrics (numLogs, logLinesCountVal) -> tuple:
 		screenLinesCount = max ([SCREENROWS * screensNum - 1, 6])
 		
 		if numLogs == 1:
-			linesPerLog = screenLinesCount
+			lines_per_log = screenLinesCount
 		else:
-			linesPerLog = screenLinesCount // numLogs
+			lines_per_log = screenLinesCount // numLogs
 	
 	else:
 		try:
-			linesPerLog = int (logLinesCountVal)
+			lines_per_log = int (logLinesCountVal)
 		except ValueError:
 			print ('Error: invalid value of "%s" for number parameter' % logLinesCountVal)
 			return (-1,-1,-1)
 		
-	return (numMode,linesPerLog,screenLinesCount)
+	return (num_mode,lines_per_log,screenLinesCount)
 
 
 #
@@ -854,17 +854,17 @@ def edit_log (log_name: str):
 	# TODO: open in GUI editor if available
 	
 	# Below will return None if syslog or glob can't find file.
-	logPath = get_log_path (log_name)
+	log_path = get_log_path (log_name)
 	
-	if logPath:
+	if log_path:
 		if 'EDITOR' in os.environ:
-			exitCode = subprocess.call ('$EDITOR "' + logPath + '"', shell=True)
+			exitCode = subprocess.call ('$EDITOR "' + log_path + '"', shell=True)
 		elif platform.system() == 'Darwin' and subprocess.call (['/usr/bin/pgrep','loginwindow']) == 0:
-			exitCode = subprocess.call (['/usr/bin/open', '-e', logPath])
+			exitCode = subprocess.call (['/usr/bin/open', '-e', log_path])
 		elif platform.system() == 'Windows':
-			exitCode = subprocess.call (['notepad', logPath])		
+			exitCode = subprocess.call (['notepad', log_path])		
 		else:
-			exitCode = subprocess.call (['/usr/bin/nano', logPath])
+			exitCode = subprocess.call (['/usr/bin/nano', log_path])
 	
 	sys.exit (exitCode)
 
@@ -936,11 +936,108 @@ def expand_tabs_for_line (log_name: str, line: str) -> str:
 	else:
 		return ''.join(result)
 
+
+class FileCheckError(Exception):
+	def __init__(self, msg):
+		self.message = msg
+	def __str__(self):
+		return self.message
+
+
+#
+#	f i n d _ f i r s t _ t i m e s t a m p
+#
+
+def find_first_timestamp (file_path: str, timestamp: datetime.datetime) -> int:
+	
+	"""
+	Scan file until the first log timestamp equal or greater than the search
+	timestamp is found, returning the line number (base 1) of matching line.
+	Note that a few logs don't emit timestamps consistently. 
+	If a match is never found -1 is returned.
+	"""
+	
+	lineResult = -1
+	line_num = 0
+	
+	while True:
+		lineTS = None
+		line_num += 1
+		line = linecache.getline (file_path, line_num)
+		if line == '': break
+		# Sniff the line to guess the date format.
+		try:
+			if line[4] == '-' and line [24] == '-':
+				# Access, ClientStats, Event, Stats, etc.
+				# 2025-10-27 04:13:24.101 -0700	Information	228	tool.beezwax.net	The previous log file reached maximum size, and was renamed to "Access-old.log".
+				lineTS = datetime.datetime.fromisoformat(line [:23])
+			elif line [4] == '/' and line [24] == ':':
+				# 2025/10/25 17:49:09.0162
+				lineTS = datetime.strptime(line [:23], "%Y/%m/%d %H:%M:%S.%f")
+			elif line [6] == ',' and line [22] in 'APM':
+				# Sep 11, 2025 12:40:52 PM org.atmosphere.cpr.AtmosphereFramework addInterceptorToAllWrappers
+				# Oct 22, 2025 2:16:56 PM org.atmosphere.util.IOUtils guestRawServletPath
+				lineTS = datetime.datetime.strptime(line [:24].rstrip(), '%b %d, %Y %I:%M:%S %p')
+			elif line [:7] == 'Thrift:':
+				# Thrift: Sat Jun  7 10:47:03 2025
+				lineTS = datetime.datetime.strptime (line [8:32], '%a %b %d %H:%M:%S %Y')
+			else:
+				continue
+		
+		# Skip over any lines that have too few characters (very few) or where we can't evaluate date.
+		
+		except IndexError:
+			continue
+		#except ValueError:
+		#	continue
+
+		# If we reached the timestamp, go into next while loop to match by text value.
+		if lineTS != None and lineTS >= timestamp:
+			lineResult = line_num
+			break
+	
+	return lineResult
+
+
+def follow_file(some_file):
+	"""
+	was tail_F
+	Capture output as it is added to the file.
+	"""
+	# https://gist.github.com/pylixm/e6bd4f5456740c12e462eecbc66692fb # tail/follow a file
+	
+	first_call = True
+	while True:
+		try:
+			with open(some_file) as input:
+				if first_call:
+					input.seek(0, 2)
+					first_call = False
+				latest_data = input.read()
+				while True:
+					if '\n' not in latest_data:
+						latest_data += input.read()
+						if '\n' not in latest_data:
+							yield ''
+							if not os.path.isfile(some_file):
+								break
+							continue
+					latest_lines = latest_data.split('\n')
+					if latest_data[-1] != '\n':
+						latest_data = latest_lines[-1]
+					else:
+						latest_data = input.read()
+					for line in latest_lines[:-1]:
+						yield line + '\n'
+		except IOError:
+			yield ''
+
+
 #
 #	g e t _ f o l d e r _ s i z e
 #
 
-def get_folder_size(path='.', excludeDir=None) -> int:
+def get_folder_size(path='.', exclude_dir=None) -> int:
 
 	total = 0
 	if path != None:
@@ -949,8 +1046,8 @@ def get_folder_size(path='.', excludeDir=None) -> int:
 				if entry.is_file():
 					total += entry.stat().st_size
 				elif entry.is_dir():
-					if entry.name != excludeDir:
-						total += get_folder_size(entry.path, excludeDir=excludeDir)
+					if entry.name != exclude_dir:
+						total += get_folder_size(entry.path, exclude_dir=exclude_dir)
 		except PermissionError:
 			print ('Error: Permission denied for', path)
 		except FileNotFoundError:
@@ -1018,39 +1115,6 @@ def get_db_directories() -> tuple:
 	return (default_path, secure_path, additional_path1, additional_path2, remote_container_path1, remote_container_path2)
 
 
-def follow_file(some_file):
-	"""
-	was tail_F
-	Capture output as it is added to the file.
-	"""
-	# https://gist.github.com/pylixm/e6bd4f5456740c12e462eecbc66692fb # tail/follow a file
-	
-	first_call = True
-	while True:
-		try:
-			with open(some_file) as input:
-				if first_call:
-					input.seek(0, 2)
-					first_call = False
-				latest_data = input.read()
-				while True:
-					if '\n' not in latest_data:
-						latest_data += input.read()
-						if '\n' not in latest_data:
-							yield ''
-							if not os.path.isfile(some_file):
-								break
-							continue
-					latest_lines = latest_data.split('\n')
-					if latest_data[-1] != '\n':
-						latest_data = latest_lines[-1]
-					else:
-						latest_data = input.read()
-					for line in latest_lines[:-1]:
-						yield line + '\n'
-		except IOError:
-			yield ''
-
 #
 #	g e t _ l o c a l _ i p
 #
@@ -1094,7 +1158,7 @@ def get_network_address() -> str:
 def get_log_path (log: str) -> str:
 	# TODO: convert Windows paths
 	#print ('basePath:', BASE_PATH)
-	#print ('logPath', LOG_PATHS [log])
+	#print ('log_path', LOG_PATHS [log])
 	pathSuffix = LOG_SPECS [log]['path']
 
 	if pathSuffix[0] == '!':
@@ -1105,10 +1169,10 @@ def get_log_path (log: str) -> str:
 		fullPath = LOG_SPECS[log]['path']
 
 	if '*' in pathSuffix:
-		pathList = glob.glob (fullPath)
-		if pathList != []:
-			pathList.sort(reverse=True) # so that newest file is first
-			fullPath = pathList[0]
+		path_list = glob.glob (fullPath)
+		if path_list != []:
+			path_list.sort(reverse=True) # so that newest file is first
+			fullPath = path_list[0]
 		else:
 			fullPath = None
 	
@@ -1120,66 +1184,41 @@ def get_file_timestamps (path: str) -> tuple:
 	return (os.path.getmtime(path), pathlib.Path(path).stat().st_mtime)
 
 	
-class FileCheckError(Exception):
-	def __init__(self, msg):
-		self.message = msg
-	def __str__(self):
-		return self.message
-
-
-#
-#	f i n d _ f i r s t _ t i m e s t a m p
-#
-
-def find_first_timestamp (filePath: str, timestamp: datetime.datetime) -> int:
-	
+def get_fms_version() -> str:
 	"""
-	Scan file until the first log timestamp equal or greater than the search
-	timestamp is found, returning the line number (base 1) of matching line.
-	Note that a few logs don't emit timestamps consistently. 
-	If a match is never found -1 is returned.
+	Fetch the version of FileMaker Server currently installed.
+	"""
+	# TODO: handle if not installed
+	
+	if platform.system() == 'Darwin':
+		fmsOutLines = subprocess.run(['/usr/sbin/pkgutil', '--pkg-info','com.filemaker.fms.worker.pkg'], capture_output=True, text=True).stdout.split('\n')
+		return fmsOutLines[1].split(': ')[1]
+		
+	elif platform.system() == 'Linux':
+		fmsOutLines = subprocess.run(['/usr/bin/apt-cache', 'policy', 'filemaker-server'], capture_output=True, text=True).stdout.split('\n')
+		return fmsOutLines[1].split(': ')[1]
+	
+	elif platform.system() == 'Windows':
+		return 'not implemented'
+	
+	return 'Unknown platform'
+
+
+def get_vaadin_version() -> str:
+	"""
+	Get the Vaadin version based off of the name of the installed vaadin-server lib file.
 	"""
 	
-	lineResult = -1
-	lineNum = 0
+	# Only match server-# so that -gae or -mpr is not included. 
+	vaadinLibServerPath = BASE_PATH + '/Web Publishing/publishing-engine/jwpc-tomcat/fmi/WEB-INF/lib/vaadin-server-[1-9]*.fmi.jar'
+	path_list = glob.glob (vaadinLibServerPath)
+	if path_list != []:
+		match = re.search (r'server-(\d*\.\d*\.\d*)', path_list[0])
+		vaadin_str = match.group(1)
+	else:
+		vaadin_str = '<missing>'
 	
-	while True:
-		lineTS = None
-		lineNum += 1
-		line = linecache.getline (filePath, lineNum)
-		if line == '': break
-		# Sniff the line to guess the date format.
-		try:
-			if line[4] == '-' and line [24] == '-':
-				# Access, ClientStats, Event, Stats, etc.
-				# 2025-10-27 04:13:24.101 -0700	Information	228	tool.beezwax.net	The previous log file reached maximum size, and was renamed to "Access-old.log".
-				lineTS = datetime.datetime.fromisoformat(line [:23])
-			elif line [4] == '/' and line [24] == ':':
-				# 2025/10/25 17:49:09.0162
-				lineTS = datetime.strptime(line [:23], "%Y/%m/%d %H:%M:%S.%f")
-			elif line [6] == ',' and line [22] in 'APM':
-				# Sep 11, 2025 12:40:52 PM org.atmosphere.cpr.AtmosphereFramework addInterceptorToAllWrappers
-				# Oct 22, 2025 2:16:56 PM org.atmosphere.util.IOUtils guestRawServletPath
-				lineTS = datetime.datetime.strptime(line [:24].rstrip(), '%b %d, %Y %I:%M:%S %p')
-			elif line [:7] == 'Thrift:':
-				# Thrift: Sat Jun  7 10:47:03 2025
-				lineTS = datetime.datetime.strptime (line [8:32], '%a %b %d %H:%M:%S %Y')
-			else:
-				continue
-		
-		# Skip over any lines that have too few characters (very few) or where we can't evaluate date.
-		
-		except IndexError:
-			continue
-		#except ValueError:
-		#	continue
-
-		# If we reached the timestamp, go into next while loop to match by text value.
-		if lineTS != None and lineTS >= timestamp:
-			lineResult = lineNum
-			break
-	
-	return lineResult
+	return vaadin_str
 
 
 #
@@ -1195,13 +1234,13 @@ def handle_set (verb: str, noun: str):
 	
 	if noun == 'debuglogging':
 		if platform.system() in ['Darwin', 'Linux']:
-			clarisConfigDir = BASE_PATH + '/Database Server/bin'
+			claris_config_dir = BASE_PATH + '/Database Server/bin'
 		else:
-			clarisConfigDir = BASE_PATH + '/Database Server'
+			claris_config_dir = BASE_PATH + '/Database Server'
 		if verb == 'enable':
-			claris_config_write (clarisConfigDir)
+			claris_config_write (claris_config_dir)
 		elif verb == 'disable':
-			claris_config_remove (clarisConfigDir)
+			claris_config_remove (claris_config_dir)
 		else:
 			print ('Error: unrecognized parameter for debuglogging:', noun)
 			print ('Use "enable" or "disable" instead.')
@@ -1394,7 +1433,7 @@ def read_tail (file_path: str, lines_from_end: int) -> list:
 		matching.append (line_num)
 		line_num += 1
 	
-	#print ('lineNum:',lineNum, 'matching:',len (matching))
+	#print ('line_num:',line_num, 'matching:',len (matching))
 	return matching [-lines_from_end:]
 
 
@@ -1435,13 +1474,13 @@ def read_tail_filtered_and_time (file_path: str, lines_from_end: int) -> list:
 	Line numbers are base 1 for use with linecache.getline.
 	"""
 	
-	check_file_validity (filePath)
+	check_file_validity (file_path)
 	matching = []
 	
 	# First, find the first line containing some kind of message date
 	# that is on or after our start date.
 	
-	line_num = find_first_timestamp (filePath, TIMESTAMP_START)
+	line_num = find_first_timestamp (file_path, TIMESTAMP_START)
 	
 	if line_num > 0:
 		# Now, filter anything after start date.
@@ -1462,28 +1501,28 @@ def read_tail_filtered_and_time (file_path: str, lines_from_end: int) -> list:
 #	r e a d _ t a i l _ t i m e
 #
 
-def read_tail_time (filePath: str, linesFromEnd: int) -> list:
+def read_tail_time (file_path: str, linesFromEnd: int) -> list:
 	"""
 	Search file for any matching lines that are on or after the matching timestamp.
 	Then return line numbers from the end of file that match the text filter.
 	Line numbers are base 1 for use with linecache.getline.
 	"""
 
-	check_file_validity (filePath)
+	check_file_validity (file_path)
 	matching = []
 	
 	# First, find the first line containing some kind of message date
 	# that is on or after our start date.
 	
-	lineNum = find_first_timestamp (filePath, TIMESTAMP_START)
+	line_num = find_first_timestamp (file_path, TIMESTAMP_START)
 
 	# Find the last line
 	while True:
-		line = linecache.getline (filePath, lineNum)
+		line = linecache.getline (file_path, line_num)
 		if line == '': break
 		# TODO: purge line list when it gets too big
-		matching.append (lineNum)
-		lineNum += 1
+		matching.append (line_num)
+		line_num += 1
 
 	# Cut result down to no more than requested lines from end of file.
 	return matching [-linesFromEnd:]
@@ -1536,17 +1575,17 @@ def parse_begin_time (timeStr: str) -> datetime.datetime:
 
 def print_log (log_name: str, count: int):
 
-	linesPrinted = -1
+	lines_printed = -1
 	
 	if OUTPUT_MODE is OutputMode.TAIL:
-		linesPrinted = print_tail (log_name, count, SHOW_HEADERS, SUCCINCT_MODE)
+		lines_printed = print_tail (log_name, count, SHOW_HEADERS, SUCCINCT_MODE)
 	
 	elif OUTPUT_MODE is OutputMode.HEAD:
-		linesPrinted = print_head (log_name, count, SHOW_HEADERS, SUCCINCT_MODE)
+		lines_printed = print_head (log_name, count, SHOW_HEADERS, SUCCINCT_MODE)
 	else:
 		print ('Error: unknown output mode')
 	
-	return linesPrinted
+	return lines_printed
 
 
 #
@@ -1614,23 +1653,23 @@ def print_db_dirs_info():
 	print ('=== DATABASE DIRECTORIES ===')
 
 	# DEFAULT
-	dbSize = get_folder_size (default_path, excludeDir=RCDIR)
-	print ('Default:                  {:16,}  {}'.format (dbSize, default_path))
+	db_size = get_folder_size (default_path, exclude_dir=RCDIR)
+	print ('Default:                  {:16,}  {}'.format (db_size, default_path))
 
 	with Spinner ('  ' + RCDIR + ':           '):
-		rcPath = os.path.join (default_path, RCDIR)
-		rcSize = get_folder_size (rcPath)
-	print ('{:16,}  {}'.format (rcSize, rcPath))
+		rc_path = os.path.join (default_path, RCDIR)
+		rc_size = get_folder_size (rc_path)
+	print ('{:16,}  {}'.format (rc_size, rc_path))
 
 	# SECURE
 	size = get_folder_size (secure_path)
 	print ('Secure:                   {:16,}  {}'.format (size, secure_path))
 
 	with Spinner ('  ' + RCDIR + ':           '):
-		rcPath = os.path.join (secure_path, RCDIR)
-		rcSize = get_folder_size (rcPath)
-	if rcSize >= 0:
-		print ('{:16,}  {}'.format (rcSize, rcPath))
+		rc_path = os.path.join (secure_path, RCDIR)
+		rc_size = get_folder_size (rc_path)
+	if rc_size >= 0:
+		print ('{:16,}  {}'.format (rc_size, rc_path))
 	else:
 		print ('{:>16}  {}'.format ('-', '-'))
 
@@ -1640,17 +1679,17 @@ def print_db_dirs_info():
 		print ('Additional Databases #1:  {:16,}  {}'.format (size, additional_path1))
 
 		with Spinner ('  ' + RCDIR + ':           '):
-			rcPath = os.path.join (additional_path1, RCDIR)
-			rcSize = get_folder_size (rcPath)
-		if rcSize >= 0:
-			print ('{:16,}  {}'.format (rcSize, rcPath))
+			rc_path = os.path.join (additional_path1, RCDIR)
+			rc_size = get_folder_size (rc_path)
+		if rc_size >= 0:
+			print ('{:16,}  {}'.format (rc_size, rc_path))
 		else:
 			print ('{:>16}  {}'.format ('-', '-'))
 
 		with Spinner ('  External Container #1: '):
-			rcSize = get_folder_size (remote_container_path1)
-		if True: # rcSize >= 0:
-			print ('{:16,}  {}'.format (rcSize, remote_container_path1))
+			rc_size = get_folder_size (remote_container_path1)
+		if True: # rc_size >= 0:
+			print ('{:16,}  {}'.format (rc_size, remote_container_path1))
 		else:
 			print ('{:>16}  {}'.format ('-', '-'))
 	
@@ -1660,16 +1699,16 @@ def print_db_dirs_info():
 		print ('Additional Databases #2:  {:16,}  {}'.format (size, additional_path2))
 
 		with Spinner ('  ' + RCDIR + ':           '):
-			rcPath = os.path.join (additional_path2, RCDIR)
-			rcSize = get_folder_size (rcPath)
-		if rcSize >= 0:
-			print ('{:16,}  {}'.format (rcSize, rcPath))
+			rc_path = os.path.join (additional_path2, RCDIR)
+			rc_size = get_folder_size (rc_path)
+		if rc_size >= 0:
+			print ('{:16,}  {}'.format (rc_size, rc_path))
 		else:
 			print ('{:16}  {}'.format ('-', '-'))
 
 		with Spinner ('  External Container #2: '):
-			size = get_folder_size (remote_container_path2)
-		print ('{:16,}  {}'.format (get_folder_size (remote_container_path2), remote_container_path2))
+			rc_size = get_folder_size (remote_container_path2)
+		print ('{:16,}  {}'.format (rc_size, remote_container_path2))
 
 	print ()
 
@@ -1679,28 +1718,31 @@ def print_db_dirs_info():
 #
 
 def print_log_header (log_name:str, succinct: bool) -> int:
-
-	headerStr = None
-	lineCount = 0
+	"""
+	Print the appropriate column headers depending on the log.
+	"""
+	
+	header_str = None
+	line_count = 0
 
 	try:
 		if succinct and 'shed' in LOG_SPECS[log_name]:
-			headerStr = LOG_SPECS [log_name]['shed']
+			header_str = LOG_SPECS [log_name]['shed']
 		else:
-			headerStr = LOG_SPECS [log_name]['head']
+			header_str = LOG_SPECS [log_name]['head']
 	except:
 		pass
 
-	if headerStr:
-		lineCount = 1 + headerStr.count ('\n')
+	if header_str:
+		line_count = 1 + header_str.count ('\n')
 		print (terminal_colors.BOLD,end='')
-		print (headerStr)
+		print (header_str)
 		print (terminal_colors.END,end='')
 	
-	return lineCount
+	return line_count
 
 
-def print_file_head_faster (filePath: str, lines: int) -> bool:
+def print_file_head_faster (file_path: str, lines: int) -> bool:
 
 	"""Print up to the given number of lines of text from the start of the file at the provided path.
 	If MAX_READ_LEN is reached, stop output and append a '+'.
@@ -1709,7 +1751,7 @@ def print_file_head_faster (filePath: str, lines: int) -> bool:
 	result = False
 
 	if lines > 0:
-		with open (filePath, 'r') as logfile:
+		with open (file_path, 'r') as logfile:
 			lines = logfile.readlines (MAX_READ_LEN)
 			for line in lines[0:SCREENROWS-1]:
 				 print (line, end="")
@@ -1733,11 +1775,11 @@ def print_file_head_faster (filePath: str, lines: int) -> bool:
 
 def print_file_head (log_name:str, lines:int) -> bool:
     
-	filePath = LOG_SPECS [log_name]['path']
-	lineCount = 0
+	file_path = LOG_SPECS [log_name]['path']
+	line_count = 0
 
 	try:
-		with open(filePath, "r+b") as f:
+		with open(file_path, "r+b") as f:
 			m=mmap.mmap(f.fileno(), 0, prot=mmap.PROT_READ)
 			print_log_header (log_name)
 			while True:
@@ -1745,9 +1787,9 @@ def print_file_head (log_name:str, lines:int) -> bool:
 				if line == '': break
 				if FILTER_REGEX.search (line):
 					print (line.rstrip())
-					lineCount =+ 1
+					line_count =+ 1
 	except IOError:
-		print ('File Error:', filePath, 'could not be opened')
+		print ('File Error:', file_path, 'could not be opened')
 		return False
 
 	return True
@@ -1758,12 +1800,12 @@ def print_file_head (log_name:str, lines:int) -> bool:
 
 def print_head (log_name: str, count: int, header: bool, succinct: bool) -> bool:
     
-	lineList = []
-	lineCounter = count
-	logPath =  get_log_path (log_name)
-
+	line_list = []
+	line_counter = count
+	log_path =  get_log_path (log_name)
+	
 	try:
-		check_file_validity (logPath)
+		check_file_validity (log_path)
 	except FileCheckError as e:
 		print ('Error:', e)
 		return -1
@@ -1772,40 +1814,40 @@ def print_head (log_name: str, count: int, header: bool, succinct: bool) -> bool
 	# that is on or after our start date.
 	
 	if header:
-		headerCount = print_log_header(log_name, succinct)
-		lineCounter -= headerCount
+		header_count = print_log_header(log_name, succinct)
+		line_counter -= header_count
 	else:
-		headerCount = 0
+		header_count = 0
 	
-	if TIMESTAMP_START != None:
-		lineNum = find_first_timestamp (logPath, TIMESTAMP_START)
+	if TIMESTAMP_START:
+		line_num = find_first_timestamp (log_path, TIMESTAMP_START)
 	else:
 		if LOG_SPECS[log_name]['lghd']:
-			lineNum = 2		# skip the column header row
+			line_num = 2		# skip the column header row
 		else:
-			lineNum = 1
+			line_num = 1
 	
-	if lineNum > 0:
-		#print (lineNum, count, maxLine)
+	if line_num > 0:
+		#print (line_num, count, maxLine)
 		
 		while True:
-			line = linecache.getline (logPath, lineNum)
+			line = linecache.getline (log_path, line_num)
 			if line == '': break
 			if FILTER_REGEX != None and FILTER_REGEX.search (line):
-				lineList.append (lineNum)
+				line_list.append (line_num)
 			else:
-				lineList.append (lineNum)
-			lineCounter -= 1
-			if lineCounter < 1: break
-			lineNum += 1
+				line_list.append (line_num)
+			line_counter -= 1
+			if line_counter < 1: break
+			line_num += 1
 	
-	if lineList != None and len (lineList) == 0:
+	if line_list != None and len (line_list) == 0:
 		print ('<' + log_name + ' has no messages>')
-
-	for lineNum in lineList:
-		print (expand_tabs_for_line (log_name, linecache.getline (logPath, lineNum)),end='')
-			
-	return len (lineList) + headerCount
+	
+	for line_num in line_list:
+		print (expand_tabs_for_line (log_name, linecache.getline (log_path, line_num)), end='')
+	
+	return len (line_list) + header_count
 
 
 #
@@ -1816,11 +1858,11 @@ def print_net_status():
 	
 	#' | grep -E "LISTEN" | sort -n -k 8'
 	
-	openPorts = list_active_ports()
+	open_ports = list_active_ports()
 	print ()
 	print ('LISTENING PROCESSES')
 	print ('PROCESS           VERS  CONNECTION')
-	for line in openPorts:
+	for line in open_ports:
 		#print (items[0],items[4],items[8])
 		if line[0] == 'L':
 			print('{:16}  {:<4}  {:<15}'.format (line[1], line[2], line[3]))
@@ -1828,18 +1870,18 @@ def print_net_status():
 	print ()
 	print ('CONNECTIONS')
 	print ('PROCESS           VERS  CONNECTION')
-	for line in openPorts:
+	for line in open_ports:
 		if line[0] == 'E':
 			print('{:16}  {:<4}  {:<15}'.format (line[1], line[2], line[3]))
 	
 	try:
 		response = urllib.request.urlopen('http://checkip.amazonaws.com', timeout=5)
-		gatewayIP = response.read().decode("utf-8")[:-1]
+		gateway_ip = response.read().decode("utf-8")[:-1]
 	except urllib.error.URLError:
-		gatewayIP = 'Could not connect to checkip.amazonaws.com'
+		gateway_ip = 'Could not connect to checkip.amazonaws.com'
 	
 	print ()
-	print ('Internet Address:', gatewayIP)
+	print ('Internet Address:', gateway_ip)
 	print ('External Interface:', get_local_ip())
 	print ('FMS Network Address(es):', get_network_address())
 	print ()
@@ -1861,13 +1903,13 @@ def print_certificate_info (name: str, host: str, port=443) -> bool:
 	context.check_hostname = False
 	context.verify_mode = ssl.CERT_NONE
 	
-	with tempfile.NamedTemporaryFile (mode='w', encoding='utf8') as certFile:
-		certFilePath = certFile.name
+	with tempfile.NamedTemporaryFile (mode='w', encoding='utf8') as cert_file:
+		cert_file_path = cert_file.name
 
 		try:
-			certFile.write(ssl.get_server_certificate((host, port)))
+			cert_file.write(ssl.get_server_certificate((host, port)))
 			# We don't have to close before _test_decode_cert below as long as we flush first.
-			certFile.flush()
+			cert_file.flush()
 		except ConnectionRefusedError:
 			print ('https://%s:%i not responding' % (host,port))
 			return False
@@ -1876,26 +1918,26 @@ def print_certificate_info (name: str, host: str, port=443) -> bool:
 			return False
 		
 		try:
-			certDict = ssl._ssl._test_decode_cert(certFilePath)
+			cert_dict = ssl._ssl._test_decode_cert(cert_file_path)
 		except Exception as e:
 			print("Error decoding certificate: {:}".format(e))
 		else:
 			print ('Subject:')
 			print (' ',end='')
-			pprint.pprint (certDict ['subject'])
-			if 'subjectAltName' in certDict:
+			pprint.pprint (cert_dict ['subject'])
+			if 'subjectAltName' in cert_dict:
 				print (' ',end='')
-				pprint.pprint (certDict ['subjectAltName'], indent=2)
-			print ('Not Before:', certDict ['notBefore'])
-			print ('Not After:', certDict ['notAfter'])
-			if 'OCSP' in certDict:
-				print ('OCSP:', certDict ['OCSP'])
-			if 'caIssuers' in certDict:
-				print ('CA Issuers:', certDict ['caIssuers'])
-			print ('Serial Number:', certDict ['serialNumber'])		
+				pprint.pprint (cert_dict ['subjectAltName'], indent=2)
+			print ('Not Before:', cert_dict ['notBefore'])
+			print ('Not After:', cert_dict ['notAfter'])
+			if 'OCSP' in cert_dict:
+				print ('OCSP:', cert_dict ['OCSP'])
+			if 'caIssuers' in cert_dict:
+				print ('CA Issuers:', cert_dict ['caIssuers'])
+			print ('Serial Number:', cert_dict ['serialNumber'])		
 			print ('Issuer:')
-			pprint.pprint (certDict['issuer'], indent=1)
-			print ('Version:', certDict ['version'])		
+			pprint.pprint (cert_dict['issuer'], indent=1)
+			print ('Version:', cert_dict ['version'])		
 	
 	return True
 
@@ -1912,52 +1954,52 @@ def print_tail (log_name: str, count: int, header: bool, succinct: bool) -> int:
 	If 'header' is true, display the log headers (if any) as first line.
 	If 'succinct' is true, strip less useful info from lines.
 	"""
-
-	lineList = []
-	lineCount = count
 	
-	logPath =  get_log_path (log_name)
+	line_list = []
+	line_count = count
+	
+	log_path =  get_log_path (log_name)
 	
 	try:
-		check_file_validity (logPath)
+		check_file_validity (log_path)
 	except FileCheckError as e:
 		print ('Error:', e)
 		return -1
 	
 	# TODO: only print headers if there's log output
 	if header:
-		headerCount = print_log_header (log_name, succinct)
-		lineCount = lineCount - headerCount
+		header_count = print_log_header (log_name, succinct)
+		line_count = line_count - header_count
 	else:
-		headerCount = 0
-
+		header_count = 0
+	
 	# Below we can files only, creating a list of records to later print.
 	
-   # JUST DETERMINE START LINE AND USE THAT AS PARAM TO SINGLE READ FUNC?
-    
+	# JUST DETERMINE START LINE AND USE THAT AS PARAM TO SINGLE READ FUNC?
+	
 	if TIMESTAMP_START != None:
 		if FILTER_REGEX != None:
-			lineList = read_tail_filtered_and_time (logPath, lineCount)
+			line_list = read_tail_filtered_and_time (log_path, line_count)
 		else:
-			lineList = read_tail_time (logPath, lineCount)
+			line_list = read_tail_time (log_path, line_count)
 	else:
 		if FILTER_REGEX != None:
-			lineList = read_tail_filtered (logPath, lineCount)
+			line_list = read_tail_filtered (log_path, line_count)
 		else:
 			#print ('unfiltered')
-			lineList = read_tail (logPath, lineCount)
+			line_list = read_tail (log_path, line_count)
 	
-	# the actual lineCount is now this:
-	lineCount = len (lineList)
+	# the actual line_count is now this:
+	line_count = len (line_list)
 	
-	if lineCount > 0:
-		if LOG_SPECS[log_name]['lghd'] and lineList[0] == 1:
+	if line_count > 0:
+		if LOG_SPECS[log_name]['lghd'] and line_list[0] == 1:
 			# Remove the header line, we'll be using our own
-			del lineList[0]
+			del line_list[0]
 
 	if succinct and 'shtb' in LOG_SPECS[log_name].keys():
-		for lineNum in lineList:
-			line = strip_line (log_name, linecache.getline (logPath, lineNum))
+		for line_num in line_list:
+			line = strip_line (log_name, linecache.getline (log_path, line_num))
 			try:
 				print (expand_tabs_for_line (log_name, line), end='')
 			except BrokenPipeError:
@@ -1965,22 +2007,22 @@ def print_tail (log_name: str, count: int, header: bool, succinct: bool) -> int:
 				# Use below to avoid a later error when Python flushes stdout
 				devnull = os.open(os.devnull, os.O_WRONLY)
 				os.dup2(devnull, sys.stdout.fileno())
-				lineCount = -lineCount
+				line_count = -line_count
 				break
 
 	else:
 		tabstops =  LOG_SPECS [log_name]['tbst']
 		
-		for lineNum in lineList:
+		for line_num in line_list:
 			try:
-				print (expand_tabs_for_line (log_name, linecache.getline (logPath, lineNum)),end='')
+				print (expand_tabs_for_line (log_name, linecache.getline (log_path, line_num)),end='')
 			except BrokenPipeError:
 				devnull = os.open(os.devnull, os.O_WRONLY)
 				os.dup2(devnull, sys.stdout.fileno())
-				lineCount = -lineCount
+				line_count = -line_count
 				break
 	
-	return len (lineList) + headerCount
+	return len (line_list) + header_count
 
 
 #
@@ -1988,7 +2030,10 @@ def print_tail (log_name: str, count: int, header: bool, succinct: bool) -> int:
 #
 
 def print_version():
-
+	"""
+	Handle a request to display the fmslog version and the versions of various FMS components.
+	"""
+	
 	print ()
 	print ('fmslogs', VERSION)
 	print ('Latest version at: https://github.com/beezwax/fmslogs')
@@ -1997,22 +2042,16 @@ def print_version():
 	
 	# FMS VERSION
 	
-	if platform.system() == 'Darwin':
-		fmsOutLines = subprocess.run(['/usr/sbin/pkgutil', '--pkg-info','com.filemaker.fms.worker.pkg'], capture_output=True, text=True).stdout.split('\n')
-		print ('FMS:',fmsOutLines[1].split(': ')[1])
-		
-	elif platform.system() == 'Linux':
-		fmsOutLines = subprocess.run(['/usr/bin/apt-cache', 'policy', 'filemaker-server'], capture_output=True, text=True).stdout.split('\n')
-		print ('FMS:',fmsOutLines[1].split(': ')[1])
+	print ('FMS:', get_fms_version())
 	
 	# JAVA
 	try:
 		if platform.system() == 'Darwin':
-			javaWords = subprocess.run([BASE_PATH + '/Web Publishing/java/bin/java', '-version'], capture_output=True, text=True).stderr.split('"')
-			print ('Java:', javaWords[1])
+			java_words = subprocess.run([BASE_PATH + '/Web Publishing/java/bin/java', '-version'], capture_output=True, text=True).stderr.split('"')
+			print ('Java:', java_words[1])
 		elif platform.system() == 'Linux':
-			javaWords = subprocess.run(['/usr/bin/java', '-version'], capture_output=True, text=True).stderr.split('"')
-			print ('Java:', javaWords[1])
+			java_words = subprocess.run(['/usr/bin/java', '-version'], capture_output=True, text=True).stderr.split('"')
+			print ('Java:', java_words[1])
 	except FileNotFoundError:
 		print ('Java: <missing>')
 	
@@ -2025,23 +2064,23 @@ def print_version():
 	# OPENSSL
 	
 	if platform.system() == 'Darwin':
-		openSSLWords = subprocess.run([BASE_PATH + '/Database Server/bin/openssl', 'version'], capture_output=True, text=True).stdout.split()
-		print ('OpenSSL:',openSSLWords[1],openSSLWords[2])
+		open_ssl_words = subprocess.run([BASE_PATH + '/Database Server/bin/openssl', 'version'], capture_output=True, text=True).stdout.split()
+		print ('OpenSSL:',open_ssl_words[1],open_ssl_words[2])
 	
 	elif platform.system() == 'Linux':
-		openSSLWords = subprocess.run(['/usr/bin/openssl', 'version'], capture_output=True, text=True).stdout.split()
-		print ('OpenSSL:',openSSLWords[1],openSSLWords[2])
+		open_ssl_words = subprocess.run(['/usr/bin/openssl', 'version'], capture_output=True, text=True).stdout.split()
+		print ('OpenSSL:',open_ssl_words[1],open_ssl_words[2])
 	
 	# APACHE/NGINX/IIS
 	
 	if platform.system() == 'Linux' or platform.system() == 'Windows':
 		if platform.system() == 'Linux':
-			nginxPath = '/usr/sbin/nginx'
+			nginx_path = '/usr/sbin/nginx'
 		else:
-			nginxPath = 'C:\\Programs\\'
+			nginx_path = 'C:\\Programs\\'
 		
 		try:
-			nginxOut = subprocess.run([nginxPath, '-v'], capture_output=True, text=True).stderr
+			nginxOut = subprocess.run([nginx_path, '-v'], capture_output=True, text=True).stderr
 			# nginx version: nginx/1.28.0\n
 			nginxVers = nginxOut.split ('/')[1][:-1]
 		except FileNotFoundError:
@@ -2050,31 +2089,21 @@ def print_version():
 		print ('NGINX:',nginxVers)
 	
 	if platform.system() == 'Darwin':
-		httpdPath = '/usr/sbin/httpd'
+		httpd_path = '/usr/sbin/httpd'
 		try:
-			httpdOut = subprocess.run([httpdPath, '-v'], capture_output=True, text=True).stdout
+			httpd_out = subprocess.run([httpd_path, '-v'], capture_output=True, text=True).stdout
 			# Server version: Apache/2.4.62 (Unix)
 			# Server built:   Nov  8 2025 20:07:11
-			httpdVersLine = httpdOut.split('\n')[0]
-			httpdVers = httpdVersLine.split('/')[1].split()[0]
+			httpd_vers_line = httpd_out.split('\n')[0]
+			httpd_vers = httpd_vers_line.split('/')[1].split()[0]
 		except FileNotFoundError:
-			httpdVers = 'not present'
-		print ('Apache:',httpdVers)
+			httpd_vers = 'not present'
+		print ('Apache:',httpd_vers)
 		
 	if platform.system() == 'Windows':
 		print ('IIS: ')
 	
-	# VAADIN
-	# Only match server-# so that -gae or -mpr is not included. 
-	vaadinLibServerPath = BASE_PATH + '/Web Publishing/publishing-engine/jwpc-tomcat/fmi/WEB-INF/lib/vaadin-server-[1-9]*.fmi.jar'
-	pathList = glob.glob (vaadinLibServerPath)
-	if pathList != []:
-		match = re.search (r'server-(\d*\.\d*\.\d*)', pathList[0])
-		vaadinStr = match.group(1)
-	else:
-		vaadinStr = '<missing>'
-			
-	print ('Vaadin:', vaadinStr)
+	print ('Vaadin:', get_vaadin_version())
 	print ()
 
 
@@ -2082,38 +2111,43 @@ def print_version():
 #   s c a n _ f i l e _ l a s t _ m a t c h
 #
 
-def scan_file_last_match (logPath: str, matchStr: str) -> str:
+def scan_file_last_match (log_path: str, match_str: str) -> str:
 	"""
 	Scan the file at given path, returning the result of last found matching pattern.
 	Returns None if no matches were found or the file is not readable.
 	"""
 	
 	try:
-		check_file_validity (logPath)
+		check_file_validity (log_path)
 	except FileCheckError as e:
 		return None
 	
 	line: str = None
-	lineNum: int = 1
-	lastMatch: str = None
+	line_num: int = 1
+	last_match: str = None
 	
 	while True:
-		line = linecache.getline (logPath, lineNum)
+		line = linecache.getline (log_path, line_num)
 		if line == '': break
-		m = re.search (matchStr, line)
-		if m: lastMatch = m.group(1)
-		lineNum += 1
+		m = re.search (match_str, line)
+		if m: last_match = m.group(1)
+		line_num += 1
 	
-	return lastMatch
+	return last_match
 
 
 class Spinner:
+	"""
+	Implements a spinning cursor for longer running processes.
+	"""
 
 	def __init__(self, message, delay=0.1):
+		self._screen_lock = None
 		self.spinner = itertools.cycle(['-', '/', '|', '\\'])
 		self.delay = delay
 		self.busy = False
 		self.spinner_visible = False
+		self.thread = None
 		sys.stdout.write(message)
 
 	def write_next(self):
@@ -2193,13 +2227,13 @@ class TailPrint (object):
 				tailedFiles - List of file to be followed. '''
 				
 		self.log_names = []
-		self.logPaths = []
+		self.log_paths = []
 		
 		for log in log_names:
 			path = get_log_path (log)
 			self.check_file_validity(path)
 			self.log_names.append (log)
-			self.logPaths.append (path)
+			self.log_paths.append (path)
 	
 	def follow(self, s=1.0):
 		''' Do a tail follow. If a callback function is registered it is called with every new line. 
@@ -2214,7 +2248,7 @@ class TailPrint (object):
 		try:
 			with ExitStack() as stack:
 				#with open(self.tailed_file) as file_:
-				fileList = [stack.enter_context(open(fpath)) for fpath in self.logPaths]
+				fileList = [stack.enter_context(open(fpath)) for fpath in self.log_paths]
 				for file in fileList:
 					file.seek(0,2)
 				
@@ -2224,7 +2258,6 @@ class TailPrint (object):
 
 					for (file,log) in zip (fileList, self.log_names):
 						while True:
-							currPosition = file.tell()
 							line = file.readline()
 							if line:
 								self.print_line (log, line)
@@ -2237,11 +2270,11 @@ class TailPrint (object):
 	def check_file_validity(self, file_):
 		''' Check whether the a given file exists, readable and is a file '''
 		if not os.access(file_, os.F_OK):
-			raise FileCheckError("File '%s' does not exist" % (file_))
+			raise FileCheckError(f'File "{file_}" does not exist')
 		if not os.access(file_, os.R_OK):
-			raise FileCheckError("File '%s' not readable" % (file_))
+			raise FileCheckError(f'File "{file_}" not readable')
 		if os.path.isdir(file_):
-			raise FileCheckError("File '%s' is a directory" % (file_))
+			raise FileCheckError(f'File "{file_}" is a directory')
 
 	def print_line(self, log_name: str, line: str):
 		"""
@@ -2252,10 +2285,11 @@ class TailPrint (object):
 		global LAST_LOG_PRINTED
 		
 		# Check that we actually want to print this line.
-		if FILTER_REGEX == None or FILTER_REGEX.search (line):
+		if FILTER_REGEX is None or FILTER_REGEX.search (line):
 			
 			if log_name != LAST_LOG_PRINTED:
-				if LAST_LOG_PRINTED != None: print ()
+				if LAST_LOG_PRINTED is not None:
+					print ()
 				# only print prefix line if we have transitioned output from one file to another
 				print ('===', log_name)
 				LAST_LOG_PRINTED = log_name
@@ -2266,6 +2300,13 @@ class TailPrint (object):
 
 
 def handle_named_options (args) -> bool:
+	"""
+	Run through all possible named options (eg, -X or --xray) and
+	execute its handler if set.
+	
+	Set the ignore_positionals variable if any later
+	positional parameters should be skipped.
+	"""
 	
 	ignore_positionals = False
 	
@@ -2305,16 +2346,21 @@ def handle_named_options (args) -> bool:
 #
 
 def main():
+	"""
+	Setup parser, handle named options, then positional options.
+	"""
+	
 	global OUTPUT_MODE, SHOW_HEADERS, SUCCINCT_MODE, TIMESTAMP_START, TRUNCATE_MODE
 	
 	parser = init_parser()
 	args = parser.parse_args()
-	screenLinesCounter = 0					# if used, will start (num lines on screen * num screens) - space for prompt line
+	screen_lines_counter = 0					# if used, will start (num lines on screen * num screens) - space for prompt line
 
 	while True:
 		ignore_positionals = handle_named_options (args)
 		
-		if ignore_positionals: break	# only follow through if not limiting output to the above options
+		if ignore_positionals:
+			break	# only follow through if not limiting output to the above options
 		
 		if args.begin:
 			#print (args.begin[0])
@@ -2328,7 +2374,7 @@ def main():
 		
 		if args.begin:
 			# Use head mode with the -b option
-			OUTPUT_MODE = OutputMode.HEAD			
+			OUTPUT_MODE = OutputMode.HEAD
 		
 		if args.headers_off:
 			SHOW_HEADERS = False
@@ -2340,17 +2386,17 @@ def main():
 			TRUNCATE_MODE = True
 			
 		if args.filter:
-			if compile_filter (args.filter[0]) == False:	# Compile the default or the filter that was just set
+			if not compile_filter (args.filter[0]):	# Compile the default or the filter that was just set
 				break													# bad regex
-
+		
 		#print (args.tail, args.logs,type (args.logs))
 		
 		# Assume we are printing at least one log.
-		numLogsToPrint = len (args.logs)
-		if numLogsToPrint == 0:
+		num_logs_to_print = len (args.logs)
+		if num_logs_to_print == 0:
 			print ('Error: expected at least one log name')
 			break
-
+		
 		# Couldn't use choices=ALL_CHOICES in argparse, so must check names manually.
 		for log_name in args.logs:
 				if log_name not in ALL_CHOICES:
@@ -2359,35 +2405,36 @@ def main():
 		
 		# TAILING/FOLLOWING LOGS
 		
-		if (type (args.tail) == bool and args.tail) or (type (args.tail) == list and args.tail[0] > 0):
+		if (isinstance (args.tail, bool) and args.tail) or (isinstance (args.tail,list) and args.tail[0] > 0):
 			# Instead of printing the current tail or head, wait for new messages
 			tailer = TailPrint (args.logs)
-			if isinstance (args.tail) == list:
+			if isinstance (args.tail, list):
 				tailer.follow(args.tail[0])
 			else:
 				tailer.follow(1.0)
-
+		
 			break
-			
+		
 		# HEAD OR TAIL
 		
-		linesPrinted = 0;
+		lines_printed = 0;
 		lastLog = args.logs[-1]
-				
-		numMode,linesPerLog,screenLinesCounter = calc_row_metrics (numLogsToPrint, args.number[0])
-		if linesPerLog < 1: break
-
-		#print (logLinesCountVal, linesPerLog, screenLinesCounter)
-
+		
+		num_mode,lines_per_log,screen_lines_counter = calc_row_metrics (num_logs_to_print, args.number[0])
+		if lines_per_log < 1: break
+		
+		#print (logLinesCountVal, lines_per_log, screen_lines_counter)
+		
 		for log_name in args.logs:
-			if log_name == lastLog and numMode == 's':
-				linesPerLog = screenLinesCounter			# Use whatever is left for last log (eg, there may be a remainder)
-
-			linesPrinted = print_log (log_name, linesPerLog)
-
-			if linesPrinted < 0: break # error occured
+			if log_name == lastLog and num_mode == 's':
+				lines_per_log = screen_lines_counter			# Use whatever is left for last log (eg, there may be a remainder)
+		
+			lines_printed = print_log (log_name, lines_per_log)
+		
+			if lines_printed < 0:
+				break # error occured
 			
-			screenLinesCounter -= linesPrinted
+			screen_lines_counter -= lines_printed
 					
 		#curses.endwin()
 		break
