@@ -489,17 +489,17 @@ CLARIS_CONFIG = """
 """
 
 class terminal_colors:
-   PURPLE = '\033[95m'
-   CYAN = '\033[96m'
-   DARKCYAN = '\033[36m'
-   BLUE = '\033[94m'
-   GREEN = '\033[92m'
-   LIGHT_GRAY = '\033[37m'
-   YELLOW = '\033[93m'
-   RED = '\033[91m'
-   BOLD = '\033[1m'
-   UNDERLINE = '\033[4m'
-   END = '\033[0m'
+	PURPLE = '\033[95m'
+	CYAN = '\033[96m'
+	DARKCYAN = '\033[36m'
+	BLUE = '\033[94m'
+	GREEN = '\033[92m'
+	LIGHT_GRAY = '\033[37m'
+	YELLOW = '\033[93m'
+	RED = '\033[91m'
+	BOLD = '\033[1m'
+	UNDERLINE = '\033[4m'
+	END = '\033[0m'
 
 
 #
@@ -512,14 +512,14 @@ def calc_row_metrics (numLogs, logLinesCountVal) -> tuple:
 	and the number of logs we have to print, determine the number of rows
 	we should attempt to print.
 	"""
-	
+
 	screenLinesCount = 0
 	num_mode = None
 
 	if logLinesCountVal.count ('s'):
 		screensNumStr = logLinesCountVal.replace('s','')
 		num_mode = 's'
-					
+
 		if len (screensNumStr) == 0:
 			screensNum = 1		# just an 's' by itself counts as 1'
 		try:
@@ -529,12 +529,12 @@ def calc_row_metrics (numLogs, logLinesCountVal) -> tuple:
 			return (-1,-1)
 			
 		screenLinesCount = max ([SCREENROWS * screensNum - 1, 6])
-		
+
 		if numLogs == 1:
 			lines_per_log = screenLinesCount
 		else:
 			lines_per_log = screenLinesCount // numLogs
-	
+
 	else:
 		try:
 			lines_per_log = int (logLinesCountVal)
@@ -1655,22 +1655,22 @@ def print_db_dirs_info():
 
 	# DEFAULT
 	db_size = get_folder_size (default_path, exclude_dir=RCDIR)
-	print ('Default:                  {:16,}  {}'.format (db_size, default_path))
+	print (f'Default:                  {db_size:16,}  {default_path}')
 
 	with Spinner ('  ' + RCDIR + ':           '):
 		rc_path = os.path.join (default_path, RCDIR)
 		rc_size = get_folder_size (rc_path)
-	print ('{:16,}  {}'.format (rc_size, rc_path))
+	print (f'{rc_size:16,}  {rc_path}')
 
 	# SECURE
 	size = get_folder_size (secure_path)
-	print ('Secure:                   {:16,}  {}'.format (size, secure_path))
+	print (f'Secure:                   {size:16,}  {secure_path}')
 
 	with Spinner ('  ' + RCDIR + ':           '):
 		rc_path = os.path.join (secure_path, RCDIR)
 		rc_size = get_folder_size (rc_path)
 	if rc_size >= 0:
-		print ('{:16,}  {}'.format (rc_size, rc_path))
+		print (f'{rc_size:16,}  {rc_path}')
 	else:
 		print ('{:>16}  {}'.format ('-', '-'))
 
@@ -1693,7 +1693,7 @@ def print_db_dirs_info():
 			print ('{:16,}  {}'.format (rc_size, remote_container_path1))
 		else:
 			print ('{:>16}  {}'.format ('-', '-'))
-	
+
 	# ADDITIONAL 2
 	if additional_path2:
 		size = get_folder_size (additional_path2, RCDIR)
@@ -1722,7 +1722,7 @@ def print_log_header (log_name:str, succinct: bool) -> int:
 	"""
 	Print the appropriate column headers depending on the log.
 	"""
-	
+
 	header_str = None
 	line_count = 0
 
@@ -1739,7 +1739,7 @@ def print_log_header (log_name:str, succinct: bool) -> int:
 		print (terminal_colors.BOLD,end='')
 		print (header_str)
 		print (terminal_colors.END,end='')
-	
+
 	return line_count
 
 
@@ -2122,7 +2122,7 @@ def scan_file_last_match (log_path: str, match_str: str) -> str:
 	
 	try:
 		check_file_validity (log_path)
-	except FileCheckError as e:
+	except FileCheckError:
 		return None
 	
 	line: str = None
@@ -2204,7 +2204,8 @@ def strip_line (log_name: str, line: str) -> str:
 	if log_name in ['access','event']:
 		if line [24] == '-':
 			items = line.split('\t')
-			line = '{:23.23}  {:11}  {:4}  {:<}'.format (items[0], items[1], items[2], items[4])		# remove timezone and hostname
+			#line = '{:23.23}  {:11}  {:4}  {:<}'.format (items[0], items[1], items[2], items[4])		# remove timezone and hostname
+			line = f'{items[0]:23.23}  {items[1]:11}  {items[2]:4}  {items[4]:<}'
 	if log_name == 'admin':
 		if line [20] == '-':
 			line = line [:20] + line [26:]							# remove timezone
@@ -2218,7 +2219,7 @@ def strip_line (log_name: str, line: str) -> str:
 
 # =================
 
-class TailPrint (object):
+class TailPrint:
 	
 	# based on https://github.com/kasun/python-tail
 	
@@ -2245,30 +2246,30 @@ class TailPrint (object):
 		Arguments:
 			s - Number of seconds to wait between checking each file'''
 		
-		MINDELAY = 0.01 # wait at least 1/100 second before checking next log
-		secs = max (s, MINDELAY)
+		MIN_DELAY = 0.01 # wait at least 1/100 second before checking next log
+		secs = max (s, MIN_DELAY)
 		
 		try:
 			with ExitStack() as stack:
 				#with open(self.tailed_file) as file_:
-				fileList = [stack.enter_context(open(fpath)) for fpath in self.log_paths]
-				for file in fileList:
+				file_list = [stack.enter_context(open (fpath, 'r', encoding='utf-8')) for fpath in self.log_paths]
+				for file in file_list:
 					file.seek(0,2)
 				
 				# Go to the end of file
 				while True:
 					time.sleep (secs)
 
-					for (file,log) in zip (fileList, self.log_names):
+					for (file,log) in zip (file_list, self.log_names):
 						while True:
 							line = file.readline()
 							if line:
 								self.print_line (log, line)
 							else:
 								break
-		
+
 		except KeyboardInterrupt:
-			return
+			pass
 
 	def check_file_validity(self, file_):
 		''' Check whether the a given file exists, readable and is a file '''

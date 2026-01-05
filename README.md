@@ -40,7 +40,8 @@ Current functionality with major issues:
 - `--ssh`: not implmented
 - `-t` or `--tail`: does not print current log segment before starting to follow/tail
 - nginx/apache/IIS: not fully implemented
- 
+- using a VPN can cause the connectivity tests to fail.
+
 ---
 
 ## INSTALLATION
