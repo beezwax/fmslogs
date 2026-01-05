@@ -10,8 +10,9 @@ Purpose: Display FileMaker Server logs and change logging options.
 
 import argparse, curses, datetime
 import glob, http.client, itertools
-import linecache, os, pathlib, platform, pprint
-import re, shutil, socket, subprocess, socket, sys
+import linecache, mmap, os, pathlib
+import platform, pprint, re, shutil
+import socket, subprocess, socket, sys
 import tempfile, textwrap, threading, time, ssl, urllib.request
 from enum import Enum
 from contextlib import ExitStack
@@ -1774,10 +1775,13 @@ def print_file_head_faster (file_path: str, lines: int) -> bool:
 #
 
 def print_file_head (log_name:str, lines:int) -> bool:
-    
+	"""
+	Not currently used.
+	memory map method of reading head.
+	"""
+	
 	file_path = LOG_SPECS [log_name]['path']
-	line_count = 0
-
+	
 	try:
 		with open(file_path, "r+b") as f:
 			m=mmap.mmap(f.fileno(), 0, prot=mmap.PROT_READ)
@@ -1787,7 +1791,6 @@ def print_file_head (log_name:str, lines:int) -> bool:
 				if line == '': break
 				if FILTER_REGEX.search (line):
 					print (line.rstrip())
-					line_count =+ 1
 	except IOError:
 		print ('File Error:', file_path, 'could not be opened')
 		return False
@@ -1833,7 +1836,7 @@ def print_head (log_name: str, count: int, header: bool, succinct: bool) -> bool
 		while True:
 			line = linecache.getline (log_path, line_num)
 			if line == '': break
-			if FILTER_REGEX != None and FILTER_REGEX.search (line):
+			if FILTER_REGEX and FILTER_REGEX.search (line):
 				line_list.append (line_num)
 			else:
 				line_list.append (line_num)
@@ -2418,15 +2421,16 @@ def main():
 		# HEAD OR TAIL
 		
 		lines_printed = 0;
-		lastLog = args.logs[-1]
+		last_log = args.logs[-1]
 		
 		num_mode,lines_per_log,screen_lines_counter = calc_row_metrics (num_logs_to_print, args.number[0])
-		if lines_per_log < 1: break
+		if lines_per_log < 1:
+			break
 		
 		#print (logLinesCountVal, lines_per_log, screen_lines_counter)
 		
 		for log_name in args.logs:
-			if log_name == lastLog and num_mode == 's':
+			if log_name == last_log and num_mode == 's':
 				lines_per_log = screen_lines_counter			# Use whatever is left for last log (eg, there may be a remainder)
 		
 			lines_printed = print_log (log_name, lines_per_log)
