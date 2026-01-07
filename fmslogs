@@ -323,7 +323,7 @@ LOG_SPECS_BASE = {
 		'tbst': [27,44,61,89,102,112,119,129],
 		'shed': 'TIMESTAMP                 Start T.  End T.  Total Elapsed  Operation         Target  Net Bytes In  Net Bytes Out  Elapsed T.  Wait T.  I/O T.  Client name',
 	},
-	
+
 	'wpedebug': {
 		'path': 'Logs/wpe_debug.log',
 		'lghd': False,
@@ -388,8 +388,8 @@ LOG_SPECS_LINUX = {
 		'tbst': 8
 	},
 
-	'stdoutserverscripting': {
-		'path': 'Logs/StdOutServerScripting.log',
+	'stderrserverscripting': {
+		'path': 'Logs/StdErrServerScripting.log',
 		'lghd': False,
 		'lghd': False,
 		'head': None,
@@ -506,43 +506,43 @@ class terminal_colors:
 #	calc_row_metrics
 #
 
-def calc_row_metrics (numLogs, logLinesCountVal) -> tuple:
+def calc_row_metrics (num_logs, log_lines_count_val) -> tuple:
 	"""
 	Using the user supplied quantity,the current terminal screen size,
 	and the number of logs we have to print, determine the number of rows
 	we should attempt to print.
 	"""
 
-	screenLinesCount = 0
+	screen_lines_count = 0
 	num_mode = None
 
-	if logLinesCountVal.count ('s'):
-		screensNumStr = logLinesCountVal.replace('s','')
+	if log_lines_count_val.count ('s'):
+		screens_num_str = log_lines_count_val.replace('s','')
 		num_mode = 's'
 
-		if len (screensNumStr) == 0:
+		if len (screens_num_str) == 0:
 			screensNum = 1		# just an 's' by itself counts as 1'
 		try:
-			screensNum = int (screensNumStr)
+			screensNum = int (screens_num_str)
 		except ValueError:
 			print ("Error: invalid number for number parameter")
 			return (-1,-1)
 			
-		screenLinesCount = max ([SCREENROWS * screensNum - 1, 6])
+		screen_lines_count = max ([SCREENROWS * screensNum - 1, 6])
 
-		if numLogs == 1:
-			lines_per_log = screenLinesCount
+		if num_logs == 1:
+			lines_per_log = screen_lines_count
 		else:
-			lines_per_log = screenLinesCount // numLogs
+			lines_per_log = screen_lines_count // num_logs
 
 	else:
 		try:
-			lines_per_log = int (logLinesCountVal)
+			lines_per_log = int (log_lines_count_val)
 		except ValueError:
-			print ('Error: invalid value of "%s" for number parameter' % logLinesCountVal)
+			print ('Error: invalid value of "%s" for number parameter' % log_lines_count_val)
 			return (-1,-1,-1)
 		
-	return (num_mode,lines_per_log,screenLinesCount)
+	return (num_mode,lines_per_log,screen_lines_count)
 
 
 #
@@ -630,9 +630,9 @@ def check_tcp_status (name: str, host: str, port):
 		if result == 0:
 			print (': Responding')
 		else:
-			print (': Error %i, Could not open port %i' % (result, port))
+			print (f': Error {result}, Could not open port {port}')
 	except socket.gaierror:
-		print (': Could not resolve host "%s"' % host)
+		print (f': Could not resolve host "{host}"')
 	finally:
 		sock.close()
 
@@ -646,72 +646,72 @@ def check_connectivity() -> str:
 	Check both internal and external interfaces for a response from the DAPI endpoint.
 	"""
 	
-	internAddr = '127.0.0.1'
-	externAddr = get_local_ip()
+	intern_addr = '127.0.0.1'
+	extern_addr = get_local_ip()
 
 	print ()
-	print ('Internal Interface:', internAddr)
-	print ('External Interface:', externAddr)
+	print ('Internal Interface:', intern_addr)
+	print ('External Interface:', extern_addr)
 	print ()
 	print ('=== Web SSL Usage ===')
 	try:
-		print_tls_version (externAddr, 443)
+		print_tls_version (extern_addr, 443)
 	except TimeoutError:
 		print ('HTTPS connection timed out')
 	else:
-		print_certificate_info ('External Web', externAddr)
+		print_certificate_info ('External Web', extern_addr)
 	print ()
 	print ('=== Connectivity Tests ===')
 	
 	# FMP/FMGO CLIENT
-	check_tcp_status ('FMP Client - Internal', internAddr, 5003)
-	check_tcp_status ('FMP Client - External', externAddr, 5003)
+	check_tcp_status ('FMP Client - Internal', intern_addr, 5003)
+	check_tcp_status ('FMP Client - External', extern_addr, 5003)
 	
 	# ADMIN API
 	adminEndpoint = '/fmi/admin/api/v2/server/metadata'
-	check_endpoint_status ('Admin API - Internal', internAddr, adminEndpoint, 400, method='POST', port=16001)
-	check_endpoint_status ('Admin API - External', externAddr, adminEndpoint, 400, method='POST', port=443, useSSL=True)
+	check_endpoint_status ('Admin API - Internal', intern_addr, adminEndpoint, 400, method='POST', port=16001)
+	check_endpoint_status ('Admin API - External', extern_addr, adminEndpoint, 400, method='POST', port=443, useSSL=True)
 	
 	# ADMIN CONSOLE
-	facEndpoint = '/admin-console/signin'
-	check_endpoint_status ('Admin Console - Internal', internAddr, facEndpoint, 200, port=16001)
-	check_endpoint_status ('Admin Console - External', externAddr, facEndpoint, 200, port=443, useSSL=True)
+	fac_endpoint = '/admin-console/signin'
+	check_endpoint_status ('Admin Console - Internal', intern_addr, fac_endpoint, 200, port=16001)
+	check_endpoint_status ('Admin Console - External', extern_addr, fac_endpoint, 200, port=443, useSSL=True)
 	
 	# ADMIN CONSOLE - WORKER
-	facEndpoint = '/admin-console/signin'
-	check_endpoint_status ('Admin Console - Worker - Internal', internAddr, facEndpoint, 200, port=16003)
+	fac_endpoint = '/admin-console/signin'
+	check_endpoint_status ('Admin Console - Worker - Internal', intern_addr, fac_endpoint, 200, port=16003)
 	
 	# CATALINA/CWP
-	check_tcp_status ('CWP - Port 9889', internAddr, 9889)
+	check_tcp_status ('CWP - Port 9889', intern_addr, 9889)
 	xmlEndpoint = '/fmi/xml'
-	check_endpoint_status ('CWP - XML - Internal', internAddr, xmlEndpoint, 954, port=16021)
-	check_endpoint_status ('CWP - XML - External', externAddr, xmlEndpoint, 954, port=443, useSSL=True)
-	check_endpoint_status ('CWP - wpem - Internal', internAddr, 'fmswpem/', 400, port=16002)
-	check_endpoint_status ('CWP - wpem - External', externAddr, '/fmi/mwpem/', 400, port=443, useSSL=True)
+	check_endpoint_status ('CWP - XML - Internal', intern_addr, xmlEndpoint, 954, port=16021)
+	check_endpoint_status ('CWP - XML - External', extern_addr, xmlEndpoint, 954, port=443, useSSL=True)
+	check_endpoint_status ('CWP - wpem - Internal', intern_addr, 'fmswpem/', 400, port=16002)
+	check_endpoint_status ('CWP - wpem - External', extern_addr, '/fmi/mwpem/', 400, port=443, useSSL=True)
 
 	# DATA API
 	dapiEndpoint = '/fmi/data/vLatest/productInfo'
-	check_endpoint_status ('Data API - Internal', internAddr, dapiEndpoint, 200, port=3000)
-	check_endpoint_status ('Data API - External', externAddr, dapiEndpoint, 200, port=443, useSSL=True)
+	check_endpoint_status ('Data API - Internal', intern_addr, dapiEndpoint, 200, port=3000)
+	check_endpoint_status ('Data API - External', extern_addr, dapiEndpoint, 200, port=443, useSSL=True)
 	
 	# JDBC
-	check_tcp_status ('JDBC - Internal', internAddr, 2399)
-	check_tcp_status ('JDBC - External', externAddr, 2399)
+	check_tcp_status ('JDBC - Internal', intern_addr, 2399)
+	check_tcp_status ('JDBC - External', extern_addr, 2399)
 	
 	# ODATA API
 	odataEndpoint = '/fmi/odata/v4'
-	check_endpoint_status ('OData API - Internal', internAddr, odataEndpoint, 401, port=3001)
-	check_endpoint_status ('OData API - External', externAddr, odataEndpoint, 401, port=443, useSSL=True)
+	check_endpoint_status ('OData API - Internal', intern_addr, odataEndpoint, 401, port=3001)
+	check_endpoint_status ('OData API - External', extern_addr, odataEndpoint, 401, port=443, useSSL=True)
 
 	# docws/fmws handler
 	xmlEndpoint = '/fmws/serverinfo'
-	check_endpoint_status ('CWP - XML - Internal', internAddr, xmlEndpoint, 954, port=1895)
-	check_endpoint_status ('CWP - XML - External', externAddr, xmlEndpoint, 954, port=443, useSSL=True)	# this may get removed
+	check_endpoint_status ('CWP - XML - Internal', intern_addr, xmlEndpoint, 954, port=1895)
+	check_endpoint_status ('CWP - XML - External', extern_addr, xmlEndpoint, 954, port=443, useSSL=True)	# this may get removed
 
 	# WEBD
 	webdEndpoint = '/fmi/webd/'
-	check_endpoint_status ('WebDirect - Internal', internAddr, webdEndpoint, 200, port=16021)
-	check_endpoint_status ('WebDirect - External', externAddr, webdEndpoint, 200, port=443, useSSL=True)
+	check_endpoint_status ('WebDirect - Internal', intern_addr, webdEndpoint, 200, port=16021)
+	check_endpoint_status ('WebDirect - External', extern_addr, webdEndpoint, 200, port=443, useSSL=True)
 
 	# alternate: curl -vk -X DELETE https://127.0.0.1/fmi/admin/api/v2/user/auth/abcdef0123456789
 	print ()
@@ -727,18 +727,17 @@ def check_file_validity (path: str):
 	Return None if no issue found, otherwise return an error message.
 	'''
 	if not os.access(path, os.F_OK):
-		raise FileCheckError ("'%s' does not exist" % (path))
+		raise FileCheckError (f"'{path}' does not exist")
 	if not os.access(path, os.R_OK):
-		raise FileCheckError ("'%s' is not readable" % (path))
+		raise FileCheckError (f"'{path}' is not readable")
 	if os.path.isdir(path):
-		raise FileCheckError ("'%s' is a directory" % (path))
+		raise FileCheckError (f"'{path}' is a directory")
 
 #
 #	c l a r i s _ c o n f i g _ r e m o v e
 #
 
 def claris_config_remove(targetDir: str) -> bool:
-	
 	"""
 	Remove ClarisConfig.json from target directory.
 	"""
@@ -757,7 +756,7 @@ def claris_config_remove(targetDir: str) -> bool:
 		print ('Adjust permissions or run fmslogs with elevated privileges.')
 		print ()
 		return False
-	
+
 	print ('The ClarisConfig.json file has been removed.')
 	print ('Restart FMS to apply the change.')
 	print ()
@@ -774,20 +773,20 @@ def claris_config_write(targetDir: str) -> bool:
 	If the file already exists, attempt to move it aside (renames with .bak).
 	"""
 
-	configPath = os.path.join(targetDir, "ClarisConfig.json")
+	configPath = os.path.join(targetDir, 'ClarisConfig.json')
 	print ()
 
 	try:
 		try:
 			# If there's an existing config file, attempt to move it aside.
-			backupPath = configPath + ".bak"
+			backupPath = configPath + '.bak'
 			shutil.move(configPath, backupPath)
 		except FileNotFoundError:
 			pass
 		except FileExistsError:
 			pass
 
-		with open(configPath, "w") as f:
+		with open(configPath, 'w', encoding='utf-8') as f:
 			f.write(CLARIS_CONFIG)
 		
 		print ('The ClarisConfig.json file has been created.')
@@ -907,11 +906,11 @@ def expand_tabs_for_line (log_name: str, line: str) -> str:
 		#                   timest zone   host vers ciph oppath len
 		match = re.match (r'\[(.*) (.*)\] (.*) (.*) (.*) "(.*)" (\d*)', line)
 		line = match.group (1) + ' ' + match.group(2) + '\t' + match.group(3) + '\t' + match.group(4) + '\t' + match.group(5) + '\t' + match.group(6) + '\n'
-	
+
 	result = []
 
 	parts = line.split('\t')
-		
+
 	col = 0
 	tab_iter = iter(tabstops)
 	next_tab = next(tab_iter, None)
@@ -927,7 +926,7 @@ def expand_tabs_for_line (log_name: str, line: str) -> str:
 			else:
 				result.append('  ')	# pad two spaces if no stop specified
 				col += 1
-	
+
 	if TRUNCATE_MODE:
 		line = ''.join(result)
 		if len (line) > SCREENCOLS:
@@ -936,7 +935,6 @@ def expand_tabs_for_line (log_name: str, line: str) -> str:
 			return line
 	else:
 		return ''.join(result)
-
 
 class FileCheckError(Exception):
 	def __init__(self, msg):
@@ -950,17 +948,16 @@ class FileCheckError(Exception):
 #
 
 def find_first_timestamp (file_path: str, timestamp: datetime.datetime) -> int:
-	
 	"""
 	Scan file until the first log timestamp equal or greater than the search
 	timestamp is found, returning the line number (base 1) of matching line.
 	Note that a few logs don't emit timestamps consistently. 
 	If a match is never found -1 is returned.
 	"""
-	
-	lineResult = -1
+
+	line_result = -1
 	line_num = 0
-	
+
 	while True:
 		lineTS = None
 		line_num += 1
@@ -994,10 +991,10 @@ def find_first_timestamp (file_path: str, timestamp: datetime.datetime) -> int:
 
 		# If we reached the timestamp, go into next while loop to match by text value.
 		if lineTS != None and lineTS >= timestamp:
-			lineResult = line_num
+			line_result = line_num
 			break
 	
-	return lineResult
+	return line_result
 
 
 def follow_file(some_file):
@@ -1041,7 +1038,7 @@ def follow_file(some_file):
 def get_folder_size(path='.', exclude_dir=None) -> int:
 
 	total = 0
-	if path != None:
+	if path:
 		try:
 			for entry in os.scandir(path):
 				if entry.is_file():
@@ -1089,7 +1086,7 @@ def get_db_directories() -> tuple:
 	event_log_path = get_log_path ('event')
 	default_path = scan_file_last_match (event_log_path, default_pathRE)
 
-	if default_path == None:
+	if default_path is not None:
 		# Nothing in current log file, see if we can find in -old log.
 		event_log_path = event_log_path.replace ('.log', '-old.log')
 		default_path = scan_file_last_match (event_log_path, default_pathRE)
@@ -1143,13 +1140,13 @@ def get_network_address() -> str:
 	Extract the last logged network addresses from FMS' Event.log.
 	Result may contain multiple space delimited addresses.
 	"""
-	
+
 	eventPath = get_log_path ('event')
 	match = scan_file_last_match (eventPath, r'Network address.*: (.*)')
 	if match == None:
 		return 'No matches in current Event.log'
-	else:
-		return match
+
+	return match
 
 
 #
@@ -1163,21 +1160,21 @@ def get_log_path (log: str) -> str:
 	pathSuffix = LOG_SPECS [log]['path']
 
 	if pathSuffix[0] == '!':
-		fullPath = None
+		full_path = None
 	elif pathSuffix[0] != '/':
-		fullPath = BASE_PATH + '/' + LOG_SPECS[log]['path']
+		full_path = BASE_PATH + '/' + LOG_SPECS[log]['path']
 	else:
-		fullPath = LOG_SPECS[log]['path']
+		full_path = LOG_SPECS[log]['path']
 
 	if '*' in pathSuffix:
-		path_list = glob.glob (fullPath)
+		path_list = glob.glob (full_path)
 		if path_list != []:
 			path_list.sort(reverse=True) # so that newest file is first
-			fullPath = path_list[0]
+			full_path = path_list[0]
 		else:
-			fullPath = None
+			full_path = None
 	
-	return fullPath
+	return full_path
 
 
 def get_file_timestamps (path: str) -> tuple:
@@ -1192,7 +1189,11 @@ def get_fms_version() -> str:
 	# TODO: handle if not installed
 	
 	if platform.system() == 'Darwin':
-		fmsOutLines = subprocess.run(['/usr/sbin/pkgutil', '--pkg-info','com.filemaker.fms.worker.pkg'], capture_output=True, text=True).stdout.split('\n')
+		fmsOutLines = subprocess.run(
+			['/usr/sbin/pkgutil', '--pkg-info','com.filemaker.fms.worker.pkg'],
+			capture_output=True,
+			text=True,
+			check=False).stdout.split('\n')
 		return fmsOutLines[1].split(': ')[1]
 		
 	elif platform.system() == 'Linux':
@@ -1213,7 +1214,7 @@ def get_vaadin_version() -> str:
 	# Only match server-# so that -gae or -mpr is not included. 
 	vaadinLibServerPath = BASE_PATH + '/Web Publishing/publishing-engine/jwpc-tomcat/fmi/WEB-INF/lib/vaadin-server-[1-9]*.fmi.jar'
 	path_list = glob.glob (vaadinLibServerPath)
-	if path_list != []:
+	if path_list:
 		match = re.search (r'server-(\d*\.\d*\.\d*)', path_list[0])
 		vaadin_str = match.group(1)
 	else:
@@ -1231,7 +1232,7 @@ def handle_set (verb: str, noun: str):
 	Execute the config changes specified in parameters.
 	"""
 	
-	validOptions = False	# may still fail for other reasons
+	valid_options = False	# may still fail for other reasons
 	
 	if noun == 'debuglogging':
 		if platform.system() in ['Darwin', 'Linux']:
@@ -1246,18 +1247,18 @@ def handle_set (verb: str, noun: str):
 			print ('Error: unrecognized parameter for debuglogging:', noun)
 			print ('Use "enable" or "disable" instead.')
 		
-		validOptions = True
+		valid_options = True
 	
-	if not validOptions:
+	if not valid_options:
 		print ('Error: unrecognized parameter(s) for set:', verb, noun)
 
 
 def init_curses():
-    global STDSCR, SCREENCOLS, SCREENROWS
-    STDSCR = curses.initscr()
-    curses.noecho()
-    SCREENROWS, SCREENCOLS = STDSCR.getmaxyx()
-    STDSCR.scrollok(1)
+	global STDSCR, SCREENCOLS, SCREENROWS
+	STDSCR = curses.initscr()
+	curses.noecho()
+	SCREENROWS, SCREENCOLS = STDSCR.getmaxyx()
+	STDSCR.scrollok(1)
 
 
 #
@@ -1313,30 +1314,32 @@ def list_active_ports() -> list:
 	List the open (listening or established) ports for processes using the fmserver user.
 	'''
 	
-	currPlatform = platform.system()
+	curr_platform = platform.system()
 	openList = []
 	
-	if currPlatform == 'Darwin' or currPlatform == 'Linux':
+	if curr_platform == 'Darwin' or curr_platform == 'Linux':
 		if os.getuid() != 0:
 			print ('Running lsof command with sudo, you may be prompted for credentials.')
 		# Could've used -F here, but seems easier to process formatted output.
-		lsofLines = subprocess.run(['sudo','lsof', '-P', '-u', 'fmserver', '+c15'], capture_output=True, text=True).stdout.split('\n')
-		for line in lsofLines:
-			accessMatch = re.search ('LISTEN|ESTABLISHED',line)
-			if accessMatch == None: continue
-			
-			if accessMatch.group(0) == 'LISTEN':
+		lsof_lines = subprocess.run(['sudo','lsof', '-P', '-u', 'fmserver', '+c15'], capture_output=True, text=True).stdout.split('\n')
+		for line in lsof_lines:
+			access_match = re.search ('LISTEN|ESTABLISHED',line)
+			if access_match is None:
+				continue
+
+			if access_match.group(0) == 'LISTEN':
 				items = line.split()
-				portNum = int (re.search(r'\d+',items[8]).group())
+				port_num = int (re.search(r'\d+',items[8]).group())
 				# process name, IP version, connection, port, type
-				openList.append (('L', items[0], items[4], items[8], portNum))
-			elif accessMatch.group(0) == 'ESTABLISHED':
+				openList.append (('L', items[0], items[4], items[8], port_num))
+
+			elif access_match.group(0) == 'ESTABLISHED':
 				# fmserverd 90834       fmserver   91u     IPv6  0x814de6ad3239a30       0t0                 TCP 172.16.184.175:5003->172.16.184.175:59835 (ESTABLISHED)
 				items = line.split()
 				# select digits after first colon
-				portNum = int (re.search(r':\d+',items[8]).group()[1:])
+				port_num = int (re.search(r':\d+',items[8]).group()[1:])
 				# process name, IP version, connection, port
-				openList.append (('E', items[0], items[4], items[8], portNum))
+				openList.append (('E', items[0], items[4], items[8], port_num))
 				
 		# remove duplicates (eg, nginx)
 		openList = list (set (openList))
@@ -1366,8 +1369,8 @@ def mac_log_tail (minutesBack: str):
 def print_ssl_options_crypto (name: str, host: str, port=443) -> bool:
 	
 	# Requires non-default module.
-	from cryptography import x509
-	from cryptography.hazmat.backends import default_backend
+	#from cryptography import x509
+	#from cryptography.hazmat.backends import default_backend
 	
 	returnFlag = False
 	context =  ssl.create_default_context()
@@ -1400,16 +1403,16 @@ def process_info ():
 	"""
 	Print the FMS related processes and their stats.
 	"""
-	
+
 	print ()
-	
+
 	if platform.system() == 'Darwin':
 		ps_result = subprocess.run(['ps', '-u', 'fmserver', '-o', 'pid,%cpu,rss,stime,time,majflt,stat,comm'], capture_output=True, text=True).stdout.split('\n')
 	elif platform.system() == 'Linux':
 		ps_result = subprocess.run(['ps', '-u', 'fmserver', '-o', 'pid,%cpu,rss,stime,times,maj_flt,stat,comm'], capture_output=True, text=True).stdout.split('\n')
 	else:
 		ps_result = ['not implemented'] # Windows
-	
+
 	for proc in ps_result:
 		print (proc)
 
@@ -1423,17 +1426,17 @@ def read_tail (file_path: str, lines_from_end: int) -> list:
 	Scan lines in file, return up to linesFromEnd line numbers from the end of file.
 	Line numbers are base 1 for use with linecache.getline.
 	"""
-	
+
 	check_file_validity (file_path)
 	line_num = 1
 	matching = []
-	
+
 	while True:
 		line = linecache.getline (file_path, line_num)
 		if line == '': break
 		matching.append (line_num)
 		line_num += 1
-	
+
 	#print ('line_num:',line_num, 'matching:',len (matching))
 	return matching [-lines_from_end:]
 
@@ -1511,16 +1514,17 @@ def read_tail_time (file_path: str, linesFromEnd: int) -> list:
 
 	check_file_validity (file_path)
 	matching = []
-	
+
 	# First, find the first line containing some kind of message date
 	# that is on or after our start date.
-	
+
 	line_num = find_first_timestamp (file_path, TIMESTAMP_START)
 
 	# Find the last line
 	while True:
 		line = linecache.getline (file_path, line_num)
-		if line == '': break
+		if line == '':
+			break
 		# TODO: purge line list when it gets too big
 		matching.append (line_num)
 		line_num += 1
@@ -1540,35 +1544,35 @@ def parse_begin_time (timeStr: str) -> datetime.datetime:
 	for 10 secs past 2pm today, or '2025-11-04 14:00' for 2pm on Nov 4.
 	"""
 	
-	newTime = None
+	new_time = None
 	
 	# Duration value or a timestamp?
 	m = re.search('[0-9]{0,6}[smhd]', timeStr)
 	if m.group(0) != None:
 		if len (timeStr) == len (m.group(0)):
-			newTime = datetime.datetime.now()
+			new_time = datetime.datetime.now()
 			unit = m.group(0)[-1]
 			unitCount = 1
 			
 			if len (m.group(0)) > 1:
 				unitCount = max (int (m.group(0)[:-1]), 1)
 			if unit == 's':
-				newTime -= datetime.timedelta(seconds=unitCount)
+				new_time -= datetime.timedelta(seconds=unitCount)
 			elif unit == 'm':
-				newTime -= datetime.timedelta(minutes=unitCount)
+				new_time -= datetime.timedelta(minutes=unitCount)
 			elif unit == 'h':
-				newTime -= datetime.timedelta(hours=unitCount)
+				new_time -= datetime.timedelta(hours=unitCount)
 			elif unit == 'd':
 				# Start days at midnight
-				newTime = newTime.replace (hour=0, minute=0, second=0, microsecond=0)
-				newTime -= datetime.timedelta(days=unitCount-1)
+				new_time = new_time.replace (hour=0, minute=0, second=0, microsecond=0)
+				new_time -= datetime.timedelta(days=unitCount-1)
 
 			else:
 				print ('Error: invalid duration')
 				sys.exit(9)
 	
-	print (newTime, unitCount)
-	return newTime
+	print (new_time, unitCount)
+	return new_time
 
 #
 #	p r i n t _ l o g
@@ -1600,21 +1604,21 @@ def print_log_info():
 	print ('LOG NAME                    SIZE  CREATED                    MODIFIED                   PATH')
 
 	for log in LOG_CHOICES:
-		fullPath = get_log_path (log)
+		full_path = get_log_path (log)
 				
-		modTime = 0;
+		mod_time = 0
 		#TODO: check for permissions issue
 
-		if fullPath:
+		if full_path:
 			try:
-				modTime = os.path.getmtime(fullPath)
+				mod_time = os.path.getmtime(full_path)
 			except FileNotFoundError:
 				pass
 		
-		if modTime > 0:
-			modTimestamp = time.ctime(modTime)
+		if mod_time > 0:
+			mod_timestamp = time.ctime(mod_time)
 			
-			statInfo = os.stat(fullPath)
+			statInfo = os.stat(full_path)
 			
 			# As of Python 3.12, st_birthtime is only available on macOS & Windows
 			# ubuntu: stat -c "%w" Access.log
@@ -1622,15 +1626,19 @@ def print_log_info():
 			
 			if platform.system() == 'Linux':
 				# TODO: Replace with a more accurate method unless st_birthtime fixed in Python 3.15
-				createTimestamp = subprocess.run(['stat', '-c', '%w', fullPath], capture_output=True, text=True).stdout[:19]
+				create_timestamp = subprocess.run(
+					['stat', '-c', '%w', full_path],
+					capture_output=True,
+					text=True,
+					check=False).stdout[:19]
 			else:
-				createTimestamp = time.ctime(statInfo.st_birthtime)
-				#createTimestamp = datetime.datetime.fromtimestamp(statInfo.st_birthtime).isoformat()
+				create_timestamp = time.ctime(statInfo.st_birthtime)
+				#create_timestamp = datetime.datetime.fromtimestamp(statInfo.st_birthtime).isoformat()
 			
 			size = statInfo.st_size
-			print('{:21} {:>10}  {:<25}  {:<25}  {:<40}'.format (log, size, createTimestamp, modTimestamp, fullPath))
+			print(f'{log:21} {size:>10}  {create_timestamp:<25}  {mod_timestamp:<25}  {full_path:<40}')
 		else:
-			if fullPath == None:
+			if full_path is None:
 				print('{:21}             ---'.format (log))
 			else:
 				print('{:21}             <missing>'.format (log))
@@ -1677,39 +1685,39 @@ def print_db_dirs_info():
 	# ADDITIONAL 1
 	if additional_path1:
 		size = get_folder_size (additional_path1, RCDIR)
-		print ('Additional Databases #1:  {:16,}  {}'.format (size, additional_path1))
+		print (f'Additional Databases #1:  {size:16,}  {additional_path1}')
 
 		with Spinner ('  ' + RCDIR + ':           '):
 			rc_path = os.path.join (additional_path1, RCDIR)
 			rc_size = get_folder_size (rc_path)
 		if rc_size >= 0:
-			print ('{:16,}  {}'.format (rc_size, rc_path))
+			print (f'{rc_size:16,}  {rc_path}')
 		else:
 			print ('{:>16}  {}'.format ('-', '-'))
 
 		with Spinner ('  External Container #1: '):
 			rc_size = get_folder_size (remote_container_path1)
 		if True: # rc_size >= 0:
-			print ('{:16,}  {}'.format (rc_size, remote_container_path1))
+			print (f'{rc_size:16,}  {remote_container_path1}')
 		else:
 			print ('{:>16}  {}'.format ('-', '-'))
 
 	# ADDITIONAL 2
 	if additional_path2:
 		size = get_folder_size (additional_path2, RCDIR)
-		print ('Additional Databases #2:  {:16,}  {}'.format (size, additional_path2))
+		print (f'Additional Databases #2:  {size:16,}  {additional_path2}')
 
 		with Spinner ('  ' + RCDIR + ':           '):
 			rc_path = os.path.join (additional_path2, RCDIR)
 			rc_size = get_folder_size (rc_path)
 		if rc_size >= 0:
-			print ('{:16,}  {}'.format (rc_size, rc_path))
+			print (f'{rc_size:16,}  {rc_path}')
 		else:
 			print ('{:16}  {}'.format ('-', '-'))
 
 		with Spinner ('  External Container #2: '):
 			rc_size = get_folder_size (remote_container_path2)
-		print ('{:16,}  {}'.format (rc_size, remote_container_path2))
+		print (f'{rc_size:16,}  {remote_container_path2}')
 
 	print ()
 
@@ -1744,25 +1752,27 @@ def print_log_header (log_name:str, succinct: bool) -> int:
 
 
 def print_file_head_faster (file_path: str, lines: int) -> bool:
-
-	"""Print up to the given number of lines of text from the start of the file at the provided path.
+	"""
+	Print up to the given number of lines of text from the start of the file at the provided path.
 	If MAX_READ_LEN is reached, stop output and append a '+'.
-	Result is False if there was an error opening or reading the file."""
+	Result is False if there was an error opening or reading the file.
+	"""
 
+	MAX_READ_LEN = 4096
 	result = False
 
 	if lines > 0:
 		with open (file_path, 'r') as logfile:
 			lines = logfile.readlines (MAX_READ_LEN)
 			for line in lines[0:SCREENROWS-1]:
-				 print (line, end="")
+				print (line, end="")
 			#STDSCR.erase()
 			#for line in lines:
 			#    STDSCR.addstr(line)
 			result = True
 			if len (lines) == MAX_READ_LEN:
-				 # indicate that we reached read limit
-				 print ('+++')
+				# indicate that we reached read limit
+				print ('+++')
 	else:
 		# We never opened the file, but will consider this a success.
 		result = True
@@ -1770,32 +1780,6 @@ def print_file_head_faster (file_path: str, lines: int) -> bool:
 	#STDSCR.getch()
 	return result
 
-#
-#   p r i n t _ f i l e _ h e a d
-#
-
-def print_file_head (log_name:str, lines:int) -> bool:
-	"""
-	Not currently used.
-	memory map method of reading head.
-	"""
-	
-	file_path = LOG_SPECS [log_name]['path']
-	
-	try:
-		with open(file_path, "r+b") as f:
-			m=mmap.mmap(f.fileno(), 0, prot=mmap.PROT_READ)
-			print_log_header (log_name)
-			while True:
-				line=m.readline()
-				if line == '': break
-				if FILTER_REGEX.search (line):
-					print (line.rstrip())
-	except IOError:
-		print ('File Error:', file_path, 'could not be opened')
-		return False
-
-	return True
 
 #
 #   p r i n t _ h e a d
@@ -1835,21 +1819,23 @@ def print_head (log_name: str, count: int, header: bool, succinct: bool) -> bool
 		
 		while True:
 			line = linecache.getline (log_path, line_num)
-			if line == '': break
+			if line == '':
+				break
 			if FILTER_REGEX and FILTER_REGEX.search (line):
 				line_list.append (line_num)
 			else:
 				line_list.append (line_num)
 			line_counter -= 1
-			if line_counter < 1: break
+			if line_counter < 1:
+				break
 			line_num += 1
-	
-	if line_list != None and len (line_list) == 0:
+
+	if line_list and len (line_list) == 0:
 		print ('<' + log_name + ' has no messages>')
-	
+
 	for line_num in line_list:
 		print (expand_tabs_for_line (log_name, linecache.getline (log_path, line_num)), end='')
-	
+
 	return len (line_list) + header_count
 
 
@@ -1858,9 +1844,13 @@ def print_head (log_name: str, count: int, header: bool, succinct: bool) -> bool
 #
 
 def print_net_status():
-	
+	"""
+	Print info on ports that are currently open and
+	active connections to FMS components.
+	"""
+
 	#' | grep -E "LISTEN" | sort -n -k 8'
-	
+
 	open_ports = list_active_ports()
 	print ()
 	print ('LISTENING PROCESSES')
@@ -1869,20 +1859,20 @@ def print_net_status():
 		#print (items[0],items[4],items[8])
 		if line[0] == 'L':
 			print('{:16}  {:<4}  {:<15}'.format (line[1], line[2], line[3]))
-	
+
 	print ()
 	print ('CONNECTIONS')
 	print ('PROCESS           VERS  CONNECTION')
 	for line in open_ports:
 		if line[0] == 'E':
 			print('{:16}  {:<4}  {:<15}'.format (line[1], line[2], line[3]))
-	
+
 	try:
 		response = urllib.request.urlopen('http://checkip.amazonaws.com', timeout=5)
 		gateway_ip = response.read().decode("utf-8")[:-1]
 	except urllib.error.URLError:
 		gateway_ip = 'Could not connect to checkip.amazonaws.com'
-	
+
 	print ()
 	print ('Internet Address:', gateway_ip)
 	print ('External Interface:', get_local_ip())
@@ -1894,7 +1884,7 @@ def print_net_status():
 #	p r i n t _ c e r t i f i c a t e _ i n f o
 #
 
-def print_certificate_info (name: str, host: str, port=443) -> bool:
+def print_certificate_info (host: str, port=443) -> bool:
 	"""
 	Display the SSL certificate attributes used by host.
 	This uses an undocumented interface, as all Python alternatives
@@ -1914,7 +1904,7 @@ def print_certificate_info (name: str, host: str, port=443) -> bool:
 			# We don't have to close before _test_decode_cert below as long as we flush first.
 			cert_file.flush()
 		except ConnectionRefusedError:
-			print ('https://%s:%i not responding' % (host,port))
+			print (f'https://{host}:{port} not responding')
 			return False
 		except Exception as e:
 			print (':', e)
@@ -1937,10 +1927,10 @@ def print_certificate_info (name: str, host: str, port=443) -> bool:
 				print ('OCSP:', cert_dict ['OCSP'])
 			if 'caIssuers' in cert_dict:
 				print ('CA Issuers:', cert_dict ['caIssuers'])
-			print ('Serial Number:', cert_dict ['serialNumber'])		
+			print ('Serial Number:', cert_dict ['serialNumber'])
 			print ('Issuer:')
 			pprint.pprint (cert_dict['issuer'], indent=1)
-			print ('Version:', cert_dict ['version'])		
+			print ('Version:', cert_dict ['version'])
 	
 	return True
 
@@ -1950,32 +1940,31 @@ def print_certificate_info (name: str, host: str, port=443) -> bool:
 #
 
 def print_tail (log_name: str, count: int, header: bool, succinct: bool) -> int:
-
 	"""
 	Print up to 'count' number of lines of text from the end of the file at path.
 	Result is False if there was an error opening or reading the file.
 	If 'header' is true, display the log headers (if any) as first line.
 	If 'succinct' is true, strip less useful info from lines.
 	"""
-	
+
 	line_list = []
 	line_count = count
-	
+
 	log_path =  get_log_path (log_name)
-	
+
 	try:
 		check_file_validity (log_path)
 	except FileCheckError as e:
 		print ('Error:', e)
 		return -1
-	
+
 	# TODO: only print headers if there's log output
 	if header:
 		header_count = print_log_header (log_name, succinct)
 		line_count = line_count - header_count
 	else:
 		header_count = 0
-	
+
 	# Below we can files only, creating a list of records to later print.
 	
 	# JUST DETERMINE START LINE AND USE THAT AS PARAM TO SINGLE READ FUNC?
@@ -2050,10 +2039,18 @@ def print_version():
 	# JAVA
 	try:
 		if platform.system() == 'Darwin':
-			java_words = subprocess.run([BASE_PATH + '/Web Publishing/java/bin/java', '-version'], capture_output=True, text=True).stderr.split('"')
+			java_words = subprocess.run(
+				[BASE_PATH + '/Web Publishing/java/bin/java', '-version'],
+				capture_output=True,
+				text=True,
+				check=False).stderr.split('"')
 			print ('Java:', java_words[1])
 		elif platform.system() == 'Linux':
-			java_words = subprocess.run(['/usr/bin/java', '-version'], capture_output=True, text=True).stderr.split('"')
+			java_words = subprocess.run(
+				['/usr/bin/java', '-version'],
+				capture_output=True,
+				text=True,
+				check=False).stderr.split('"')
 			print ('Java:', java_words[1])
 	except FileNotFoundError:
 		print ('Java: <missing>')
@@ -2061,17 +2058,29 @@ def print_version():
 	# NODE.JS
 	
 	if platform.system() in ['Darwin', 'Linux']:
-		nodeVersion = subprocess.run([BASE_PATH + '/node/bin/node', '-v'], capture_output=True, text=True).stdout[1:]
-		print ('Node:', nodeVersion, end='')
+		node_version = subprocess.run(
+			[BASE_PATH + '/node/bin/node', '-v'],
+			capture_output=True,
+			text=True,
+			check=False).stdout[1:]
+		print ('Node:', node_version, end='')
 	
 	# OPENSSL
 	
 	if platform.system() == 'Darwin':
-		open_ssl_words = subprocess.run([BASE_PATH + '/Database Server/bin/openssl', 'version'], capture_output=True, text=True).stdout.split()
+		open_ssl_words = subprocess.run(
+			[BASE_PATH + '/Database Server/bin/openssl','version'],
+			capture_output=True,
+			text=True,
+			check=False).stdout.split()
 		print ('OpenSSL:',open_ssl_words[1],open_ssl_words[2])
 	
 	elif platform.system() == 'Linux':
-		open_ssl_words = subprocess.run(['/usr/bin/openssl', 'version'], capture_output=True, text=True).stdout.split()
+		open_ssl_words = subprocess.run(
+			['/usr/bin/openssl', 'version'],
+				capture_output=True,
+				text=True,
+				check=False).stdout.split()
 		print ('OpenSSL:',open_ssl_words[1],open_ssl_words[2])
 	
 	# APACHE/NGINX/IIS
@@ -2083,13 +2092,13 @@ def print_version():
 			nginx_path = 'C:\\Programs\\'
 		
 		try:
-			nginxOut = subprocess.run([nginx_path, '-v'], capture_output=True, text=True).stderr
+			nginx_out = subprocess.run([nginx_path, '-v'], capture_output=True, text=True).stderr
 			# nginx version: nginx/1.28.0\n
-			nginxVers = nginxOut.split ('/')[1][:-1]
+			nginx_vers = nginx_out.split ('/')[1][:-1]
 		except FileNotFoundError:
-			nginxVers = 'not present'
+			nginx_vers = 'not present'
 		
-		print ('NGINX:',nginxVers)
+		print ('NGINX:',nginx_vers)
 	
 	if platform.system() == 'Darwin':
 		httpd_path = '/usr/sbin/httpd'
@@ -2119,23 +2128,25 @@ def scan_file_last_match (log_path: str, match_str: str) -> str:
 	Scan the file at given path, returning the result of last found matching pattern.
 	Returns None if no matches were found or the file is not readable.
 	"""
-	
+
 	try:
 		check_file_validity (log_path)
 	except FileCheckError:
 		return None
-	
+
 	line: str = None
 	line_num: int = 1
 	last_match: str = None
-	
+
 	while True:
 		line = linecache.getline (log_path, line_num)
-		if line == '': break
+		if line == '':
+			break
 		m = re.search (match_str, line)
-		if m: last_match = m.group(1)
+		if m:
+			last_match = m.group(1)
 		line_num += 1
-	
+
 	return last_match
 
 
@@ -2154,6 +2165,7 @@ class Spinner:
 		sys.stdout.write(message)
 
 	def write_next(self):
+		"""Update the spinner character."""
 		with self._screen_lock:
 			if not self.spinner_visible:
 				sys.stdout.write(next(self.spinner))
@@ -2200,7 +2212,7 @@ def strip_line (log_name: str, line: str) -> str:
 	When possible, remove repetitive or extraneous text in the logs.
 	This is done after expanding tabs so columns should be at fixed positions.
 	"""
-	
+
 	if log_name in ['access','event']:
 		if line [24] == '-':
 			items = line.split('\t')
@@ -2210,9 +2222,9 @@ def strip_line (log_name: str, line: str) -> str:
 		if line [20] == '-':
 			line = line [:20] + line [26:]							# remove timezone
 	if log_name in ['clientstats','dapi','topcall']:
-			line = line [:23] + line [29]								# remove timezone
+		line = line [:23] + line [29]								# remove timezone
 	if log_name == 'dapi':
-			line = line [:23] + line [29:45] + line[62:]			# remove timezone & hostname
+		line = line [:23] + line [29:45] + line[62:]			# remove timezone & hostname
 
 	return line
 
@@ -2375,6 +2387,7 @@ def main():
 		
 		if args.head:
 			OUTPUT_MODE = OutputMode.HEAD
+			# TODO: -h is canceling the effect of -f
 		
 		if args.begin:
 			# Use head mode with the -b option
@@ -2392,9 +2405,9 @@ def main():
 		if args.filter:
 			if not compile_filter (args.filter[0]):	# Compile the default or the filter that was just set
 				break													# bad regex
-		
+
 		#print (args.tail, args.logs,type (args.logs))
-		
+
 		# Assume we are printing at least one log.
 		num_logs_to_print = len (args.logs)
 		if num_logs_to_print == 0:
@@ -2403,12 +2416,12 @@ def main():
 		
 		# Couldn't use choices=ALL_CHOICES in argparse, so must check names manually.
 		for log_name in args.logs:
-				if log_name not in ALL_CHOICES:
-					print ('Error:', log_name,'not a valid log name')
-					sys.exit (1)
-		
+			if log_name not in ALL_CHOICES:
+				print ('Error:', log_name,'not a valid log name')
+				sys.exit (1)
+
 		# TAILING/FOLLOWING LOGS
-		
+
 		if (isinstance (args.tail, bool) and args.tail) or (isinstance (args.tail,list) and args.tail[0] > 0):
 			# Instead of printing the current tail or head, wait for new messages
 			tailer = TailPrint (args.logs)
@@ -2428,7 +2441,7 @@ def main():
 		if lines_per_log < 1:
 			break
 		
-		#print (logLinesCountVal, lines_per_log, screen_lines_counter)
+		#print (log_lines_count_val, lines_per_log, screen_lines_counter)
 		
 		for log_name in args.logs:
 			if log_name == last_log and num_mode == 's':
@@ -2440,10 +2453,10 @@ def main():
 				break # error occured
 			
 			screen_lines_counter -= lines_printed
-					
+
 		#curses.endwin()
 		break
 
 if __name__=="__main__":
-    main()
+	main()
 

@@ -125,7 +125,9 @@ Next, attempt to open using a GUI editor. On macOS, first check that there is a 
 Finally, on Ubuntu and macOS, it will attempt to open the log using the Terminal based nano text editor.
 
 ### -f, --filter
-Only display messages matching the given regular expression (regex). Filtering will happen before any -r/--range limits are applied or simplification if using --succinct.
+For any subsequent logs, only display messages matching the given regular expression (regex).
+
+Filtering will happen before any -n/--number limits are applied, or simplification if using --succinct.
 
 The version of regex expressions used is similar to Perl's regex (often called PCRE), but is specific to Python.
 
