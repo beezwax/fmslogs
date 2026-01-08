@@ -1581,6 +1581,7 @@ def parse_begin_time (timeStr: str) -> datetime.datetime:
 def print_log (log_name: str, count: int):
 
 	lines_printed = -1
+	print (OUTPUT_MODE)
 	
 	if OUTPUT_MODE is OutputMode.TAIL:
 		lines_printed = print_tail (log_name, count, SHOW_HEADERS, SUCCINCT_MODE)
@@ -1821,20 +1822,23 @@ def print_head (log_name: str, count: int, header: bool, succinct: bool) -> bool
 			line = linecache.getline (log_path, line_num)
 			if line == '':
 				break
-			if FILTER_REGEX and FILTER_REGEX.search (line):
-				line_list.append (line_num)
+			if FILTER_REGEX:
+				if FILTER_REGEX.search (line):
+					line_list.append (line_num)
+					line_counter -= 1
 			else:
 				line_list.append (line_num)
-			line_counter -= 1
+				line_counter -= 1
+
 			if line_counter < 1:
 				break
 			line_num += 1
 
-	if line_list and len (line_list) == 0:
+	if line_list:
+		for line_num in line_list:
+			print (expand_tabs_for_line (log_name, linecache.getline (log_path, line_num)), end='')
+	else:
 		print ('<' + log_name + ' has no messages>')
-
-	for line_num in line_list:
-		print (expand_tabs_for_line (log_name, linecache.getline (log_path, line_num)), end='')
 
 	return len (line_list) + header_count
 
@@ -2387,6 +2391,7 @@ def main():
 		
 		if args.head:
 			OUTPUT_MODE = OutputMode.HEAD
+
 			# TODO: -h is canceling the effect of -f
 		
 		if args.begin:
@@ -2404,7 +2409,7 @@ def main():
 			
 		if args.filter:
 			if not compile_filter (args.filter[0]):	# Compile the default or the filter that was just set
-				break													# bad regex
+				break												# bad regex
 
 		#print (args.tail, args.logs,type (args.logs))
 
