@@ -484,7 +484,8 @@ ALL_CHOICES = LOG_CHOICES  # TODO: need to add in choices that aren't log names?
 CLARIS_CONFIG = """
 {
 	"AlwaysPrint": true,
-	"ForceOutput": true
+	"ForceOutput": true,
+	"Server": true
 }
 """
 

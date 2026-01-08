@@ -12,7 +12,7 @@ Some things that it does that using just tail, head, or Get-Content don't:
 - connectivity tests for 10 different FMS endpoints
 
 Design Goals:
-- no dependencies other than the core Python libraries, and requiring just one file to be copied onto server
+- no install dependencies other than Python, and requiring just a single file to be copied onto server
 - support all three server environments: macOS, Ubuntu, and Windows
 - consolidates access to various logs
 - no import step needed
@@ -94,7 +94,6 @@ options:
   -p, --process-info		metrics for FMS processes
   -S, --set SET             change log configuration options
   -s, --succinct            strip less useful details from log output (partially implemented)
-  --ssh SSH                 use the connection string to fetch logs from remote server
   -t, --tail                wait for any new messages after printing current end of log
   --truncate                cut off any output if beyond width of screen
   -V, --version             version info for fmslogs and FMS components
