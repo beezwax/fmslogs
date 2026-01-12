@@ -48,12 +48,11 @@ Current functionality with major issues:
 
 ### macOS
 
-Copy the `fmslog` file to a directory in user's command PATH:
-```
-cd /tmp
-curl -o fmslogs.zip https://codeload.github.com/beezwax/fmslogs/zip/refs/heads/main
-unzip fmslogs.zip
-sudo cp fmslogs-main/fmslogs /usr/local/bin
+Copy the latest version of the `fmslogs` file to a directory in user's command PATH:
+
+macOS: `sudo curl -o /usr/local/bin/fmslogs https://raw.githubusercontent.com/beezwax/fmslogs/refs/heads/main/fmslogs && sudo chmod +x /usr/local/bin/fmslogs`
+Ubuntu: `sudo curl -o /usr/bin/fmslogs https://raw.githubusercontent.com/beezwax/fmslogs/refs/heads/main/fmslogs && sudo chmod +x /usr/bin/fmslogs`
+
 ```
 
 ### Ubuntu
@@ -101,6 +100,10 @@ options:
 ```
 
 ---
+
+### -B, --backups
+
+List the paths and their sizes for any backup sets. Target paths are determined by scanning FMS' preferences file.
 
 ### -b, --begin
 Start printing logs on or after the given duration. Durations are an optional number followed by:

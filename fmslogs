@@ -4,7 +4,6 @@
 """
 Filename: fmslogs.py
 Author: Simon Brown on 10/15/2025
-Version: 0.30, 2026-01-08
 Purpose: Display FileMaker Server logs and change logging options.
 """
 
@@ -35,7 +34,8 @@ fmslogs -s enable topcall  # enable TopCall.log
 Reset repo:  git fetch origin main; git reset --hard origin/main
 """
 
-VERSION = "0.30 - 2026-01-08"
+VERSION = "0.31 - 2026-01-12"
+
 TIMESTAMP_START = None
 FILTER_REGEX = None
 PASSWORD = None
@@ -1431,7 +1431,8 @@ def list_backup_locations() -> set:
 	with open (DBS_CONFIG_PATH, 'r', encoding='utf-8', errors='ignore') as f:
 		for line in f:
 			match = backupRE.search (line)
-			if match:
+			# Above may match targests that are emtpy except for "file:"
+			if match and match.group(1)[-1] != ':':
 				backup_locations.append (convert_filemaker_path (match.group(1)))
 	
 	return set (backup_locations)
