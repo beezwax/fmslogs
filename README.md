@@ -80,6 +80,7 @@ positional arguments (log name):
   {access,admin,clientstats,dapi,event,fac,fmodatadebug,fmsadmindebug,fmsasedebug,fmscwpc,fmscwpcli,fmsdebug,fmsgetpasskeyebug,fmshdebug,fmshelper,fmslogdebug,fmwipd,httpaccess,httpdctlerr,httpdctlout,httperror,httpsslaccess,httpsslerror,install,httpaccess,loadschedules,odata,scriptevent,stats,stderr,stdout,topcall,trimlog,wpe,wpedebug,interval,clientstats,fmsdebug,logsize,topcall}
 
 options:
+  -B, --backups             list scheduled backup sets present
   -b, --begin BEGIN         start at first message on or after time or time interval in BEGIN
   -c, --check-connectivity	test connectivity to FMS components
   -d, --databases           list directories being used for databases and external container data
