@@ -1417,7 +1417,7 @@ def list_active_ports() -> list:
 #
 #
 
-def list_backup_locations() -> list:
+def list_backup_locations() -> set:
 	"""
 	Return the full path of any backup schedule locations currently defined in FMS Preferences.
 	The paths will be the base path; each backup will be in its own subfolder.
@@ -1434,7 +1434,7 @@ def list_backup_locations() -> list:
 			if match:
 				backup_locations.append (convert_filemaker_path (match.group(1)))
 	
-	return backup_locations
+	return set (backup_locations)
 
 
 #
