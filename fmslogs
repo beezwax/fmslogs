@@ -34,7 +34,7 @@ fmslogs -s enable topcall  # enable TopCall.log
 Reset repo:  git fetch origin main; git reset --hard origin/main
 """
 
-VERSION = "0.31 - 2026-01-12"
+VERSION = "0.32 - 2026-01-12"
 
 TIMESTAMP_START = None
 FILTER_REGEX = None
@@ -1638,12 +1638,40 @@ def print_backup_info():
 					size = get_folder_size(full_path)
 					print(f'{size:14,}  {full_path}')
 			else:
-				size = get_folder_size(location)
-				print(f'{size:14,}  {location}')
+				print ('Empty or Missing:', location)
 			print ()
 	else:
 		print ('No backup locations defined in FMS Preferences.')
-	print ()
+		print ()
+
+
+def print_documents_info():
+	"""
+	Display information about FMS's Documents folder.
+	"""
+	documents_path = os.path.join (BASE_PATH, 'Data','Documents') 
+	with Spinner ('FMS Documents  '):
+		documents_size = get_folder_size (documents_path)
+	print (f'{documents_size:16,}')
+
+def print_fmtmp_info():
+	"""
+	Display information about FMS' usage of FMTEMP* files in /tmp.
+	"""
+	tmp_path = '/tmp/FMTEMPFM*'
+	path_list = glob.glob (tmp_path)
+	file_count = 0
+	size_sum = 0
+	if path_list:
+		file_count = len (path_list)
+		for file in path_list[0]:
+			stat_info = os.stat(file)
+			size_sum += stat_info.st_size
+		path_label = f'/tmp/FMTMPFM* ({file_count})'
+	else:
+		path_label = '/tmp/FMTMPFM* (0)'
+
+	print (f'{path_label:21} {size_sum:>10}')
 
 
 def print_log (log_name: str, count: int):
@@ -1705,14 +1733,18 @@ def print_log_info():
 				#create_timestamp = datetime.datetime.fromtimestamp(stat_info.st_birthtime).isoformat()
 			
 			size = stat_info.st_size
-			print(f'{log:21} {size:>10}  {create_timestamp:<25}  {mod_timestamp:<25}  {full_path:<40}')
+			print(f'{log:21} {size:>11,}  {create_timestamp:<25}  {mod_timestamp:<25}  {full_path:<40}')
 		else:
 			if full_path is None:
-				print(f'{log:21}             ---')
+				print(f'{log:21}              ---')
 			else:
-				print(f'{log:21}             <missing>')
+				print(f'{log:21}              <missing>')
 
 	print ()
+	print_documents_info()
+	print_fmtmp_info()
+	print ()
+
 
 #
 #	p r i n t _ d b _ d i r s _ i n f o

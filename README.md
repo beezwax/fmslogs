@@ -105,6 +105,12 @@ options:
 
 List the paths and their sizes for any backup sets. Target paths are determined by scanning FMS' preferences file.
 
+Disk usage calculations may overstate actual usage, since backup sets can use shared (hard linked) copies of the same data
+if there were no changes between the backup sets and the backups were created with the same backup schedule.
+
+On macOS, it is possible to have multiple target folders that FMS' will still resolve to the same location. Typically this is because
+the boot drive had been renamed at some point.
+
 ### -b, --begin
 Start printing logs on or after the given duration. Durations are an optional number followed by:
 - 's': seconds from now
