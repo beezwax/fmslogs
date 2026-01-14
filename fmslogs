@@ -1636,11 +1636,11 @@ def print_backup_info():
 			#print ('Base Path:', location)
 			subfolders = get_subfolder_names(location)
 			if subfolders:
-				print ('{:>14}  {}'.format ('SIZE', 'PATH'))
+				print ('{:>16}  {}'.format ('SIZE', 'PATH'))
 				for subfolder in subfolders:
 					full_path = os.path.join(location, subfolder)
 					size = get_folder_size(full_path)
-					print(f'{size:14,}  {full_path}')
+					print(f'{size:16,}  {full_path}')
 			else:
 				print ('Empty or Missing:', location)
 			print ()
@@ -1648,6 +1648,9 @@ def print_backup_info():
 		print ('No backup locations defined in FMS Preferences.')
 		print ()
 
+#
+#	p r i n t _ d o c u m e n t s _ i n f o
+#
 
 def print_documents_info():
 	"""
@@ -1657,6 +1660,10 @@ def print_documents_info():
 	with Spinner ('FMS Documents            '):
 		documents_size = get_folder_size (documents_path)
 	print (f'{documents_size:16,}')
+
+#
+#	p r i n t _ f m t m p _ i n f o
+#
 
 def print_fmtmp_info():
 	"""
@@ -1675,7 +1682,7 @@ def print_fmtmp_info():
 	else:
 		path_label = '/tmp/FMTMPFM* (0)'
 
-	print (f'{path_label:30} {size_sum:>11}')
+	print (f'{path_label:25} {size_sum:>16,}')
 
 
 def print_log (log_name: str, count: int):
@@ -1821,7 +1828,7 @@ def print_data_dirs_info():
 		print (f'{rc_size:16,}  {remote_container_path2}')
 
 	print ()
-	print ('=== OTHER DATA DIRECTORIES ===')
+	print ('=== OTHER DATA DIRECTORIES & FILES ===')
 	print ()
 	print_documents_info()
 	print_fmtmp_info()
