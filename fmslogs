@@ -34,7 +34,7 @@ fmslogs -s enable topcall  # enable TopCall.log
 Reset repo:  git fetch origin main; git reset --hard origin/main
 """
 
-VERSION = "0.32 - 2026-01-12"
+VERSION = "0.33 - 2026-01-13"
 
 TIMESTAMP_START = None
 FILTER_REGEX = None
@@ -843,27 +843,31 @@ def convert_filemaker_path (fm_path: str) -> str:
 	filewin:/C:/Program Files/FileMaker/FileMaker Server/Data/Databases/
 	"""
 
-	if fm_path.startswith ('filemac:/'):
-		fm_path = fm_path.replace ('filemac:/', '/Volumes/')
-		mac_path_old = pathlib.Path (fm_path)
-		if mac_path_old.exists():
-			return str (mac_path_old)
-		else:
-			# Rebuild path without drive name and return that if it exists.
-			mac_path_new = pathlib.Path().joinpath ('/', *mac_path_old.parts[3:])
-			if mac_path_new.exists():
-				return str (mac_path_new)
-			else:
+	if fm_path:
+		if fm_path.startswith ('filemac:/'):
+			fm_path = fm_path.replace ('filemac:/', '/Volumes/')
+			mac_path_old = pathlib.Path (fm_path)
+			if mac_path_old.exists():
 				return str (mac_path_old)
+			else:
+				# Rebuild path without drive name and return that if it exists.
+				mac_path_new = pathlib.Path().joinpath ('/', *mac_path_old.parts[3:])
+				if mac_path_new.exists():
+					return str (mac_path_new)
+				else:
+					return str (mac_path_old)
+	
+		elif fm_path.startswith ('filelinux:/'):
+			return fm_path.replace ('filelinux:/', '/')
+		elif fm_path.startswith ('filewin:/'):
+			win_path = fm_path.replace ('filewin:/', '')
+			win_path = win_path.replace ('/', '\\')
+			return win_path
+		else:
+			return fm_path
 
-	elif fm_path.startswith ('filelinux:/'):
-		return fm_path.replace ('filelinux:/', '/')
-	elif fm_path.startswith ('filewin:/'):
-		win_path = fm_path.replace ('filewin:/', '')
-		win_path = win_path.replace ('/', '\\')
-		return win_path
-	else:
-		return fm_path
+	return None
+
 
 #
 #	e d i t _ l o g
@@ -1152,7 +1156,7 @@ def get_db_directories() -> tuple:
 	event_log_path = get_log_path ('event')
 	default_path = scan_file_last_match (event_log_path, default_pathRE)
 
-	if default_path is not None:
+	if default_path is None:
 		# Nothing in current log file, see if we can find in -old log.
 		event_log_path = event_log_path.replace ('.log', '-old.log')
 		default_path = scan_file_last_match (event_log_path, default_pathRE)
@@ -1166,8 +1170,8 @@ def get_db_directories() -> tuple:
 	if additional_path1:
 		additional_path1 = convert_filemaker_path (additional_path1)
 		remote_container_path1 = scan_file_last_match (event_log_path, remote_container_path1RE)
-		if remote_container_path1: remote_container_path1 = convert_filemaker_path (remote_container_path1)
-		print ('remote_container_path1:', remote_container_path1)
+		if remote_container_path1:
+			remote_container_path1 = convert_filemaker_path (remote_container_path1)
 
 		additional_path2 = scan_file_last_match (event_log_path, additional_path2RE)
 		if additional_path2:
@@ -1343,7 +1347,7 @@ def init_parser() -> argparse.ArgumentParser:
 	parser.add_argument('-B', '--backups', action='store_true', help='list paths & sizes of backup sets')
 	parser.add_argument('-b', '--begin', nargs=1, help='start at first message on or after time or time interval')
 	parser.add_argument('-c', '--check-connectivity', dest='check_connectivity', action='store_true', help='check connectivity of API endpoints')
-	parser.add_argument('-d', '--databases', action='store_true', help='display database & container directories')
+	parser.add_argument('-d', '--databases', action='store_true', help='display database, container, document, and temp directory info')
 	parser.add_argument('-e', '--edit', nargs=1, help='open the log file using the command defined by $EDITOR')
 	parser.add_argument('-f', '--filter', nargs=1, help='only return lines matching regex expression')
 	parser.add_argument('-h', '--head', action='store_true', help='display the first lines of log files')
@@ -1650,7 +1654,7 @@ def print_documents_info():
 	Display information about FMS's Documents folder.
 	"""
 	documents_path = os.path.join (BASE_PATH, 'Data','Documents') 
-	with Spinner ('FMS Documents  '):
+	with Spinner ('FMS Documents            '):
 		documents_size = get_folder_size (documents_path)
 	print (f'{documents_size:16,}')
 
@@ -1664,14 +1668,14 @@ def print_fmtmp_info():
 	size_sum = 0
 	if path_list:
 		file_count = len (path_list)
-		for file in path_list[0]:
+		for file in path_list:
 			stat_info = os.stat(file)
 			size_sum += stat_info.st_size
 		path_label = f'/tmp/FMTMPFM* ({file_count})'
 	else:
 		path_label = '/tmp/FMTMPFM* (0)'
 
-	print (f'{path_label:21} {size_sum:>10}')
+	print (f'{path_label:30} {size_sum:>11}')
 
 
 def print_log (log_name: str, count: int):
@@ -1741,16 +1745,13 @@ def print_log_info():
 				print(f'{log:21}              <missing>')
 
 	print ()
-	print_documents_info()
-	print_fmtmp_info()
-	print ()
 
 
 #
-#	p r i n t _ d b _ d i r s _ i n f o
+#	p r i n t _ d a t a _ d i r s _ i n f o
 #
  
-def print_db_dirs_info():
+def print_data_dirs_info():
 	"""
 	Print the database folder paths extracted from Event.log.
 	"""
@@ -1819,6 +1820,11 @@ def print_db_dirs_info():
 			rc_size = get_folder_size (remote_container_path2)
 		print (f'{rc_size:16,}  {remote_container_path2}')
 
+	print ()
+	print ('=== OTHER DATA DIRECTORIES ===')
+	print ()
+	print_documents_info()
+	print_fmtmp_info()
 	print ()
 
 
@@ -2542,7 +2548,7 @@ def handle_named_options (args) -> bool:
 		ignore_positionals = True
 
 	if args.databases:
-		print_db_dirs_info()
+		print_data_dirs_info()
 		ignore_positionals = True
 
 	if args.list:
