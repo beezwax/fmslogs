@@ -581,7 +581,10 @@ def check_endpoint_status (name: str, host: str, endpoint: str, expectedStatus: 
 				print (': Responding')
 			result_flag = True
 		else:
-			print (':', response.reason)
+			if response.reason:
+				print (':', response.reason)
+			else:
+				print (': Error, connection failed')
 	except http.client.HTTPException as e:
 		print (':', e)
 	except Exception as e:
@@ -1357,10 +1360,10 @@ def init_parser() -> argparse.ArgumentParser:
 	parser.add_argument('-m', '--merge', action='store_true', help='combine output of two or more logs based on the message timestamps')
 	parser.add_argument('-n', '--number', nargs=1, default=['1s'], help='range or number of lines to print')
 	parser.add_argument('-p', '--process-info', action='store_true', dest='process_info', help='list FMS related processes and their stats')
-	parser.add_argument('-P', '--password', help='FMS console or SSH password')
+	parser.add_argument('-P', '--password', help='FMS console')
 	parser.add_argument('-S', '--set', nargs=2, help='change log configuration option')
 	parser.add_argument('-s', '--succinct', action='store_true', help='strip less useful details from log output')
-	parser.add_argument('--ssh', nargs=1, help='use the connection string to fetch logs from remote server')
+	#parser.add_argument('--ssh', nargs=1, help='use the connection string to fetch logs from remote server')
 	parser.add_argument('-t', dest='tail', action='store_true', help='wait for any new messages')
 	parser.add_argument('--tail', dest='tail', type=float, nargs=1, default=[-1.0], help='wait for any new messages, specifying number of seconds to wait for each file')
 	parser.add_argument('--truncate', action='store_true', help='cut off any output if beyond width of screen')
@@ -1709,7 +1712,7 @@ def print_log_info():
 	"""Print one line per supported log with path, size, creation & mod timestamps."""
 
 	print()
-	print ('LOG NAME                    SIZE  CREATED                    MODIFIED                   PATH')
+	print ('LOG NAME                     SIZE  CREATED                    MODIFIED                   PATH')
 
 	for log in LOG_CHOICES:
 		full_path = get_log_path (log)

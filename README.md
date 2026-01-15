@@ -34,6 +34,7 @@ Design Goals:
 
 Current functionality with major issues:
 - `-b` or `--begin`: only working with durations (eg, 'd' or '1d' for 1 day)
+- `-c` or `--check-connectivity`: VPN connection may confuse tests
 - `-m` or `--merge`: not working
 - `-S` or `--set`: not working except for `enable/disable debuglogging`
 - `-s` or `--succinct`: partially implemented
@@ -52,6 +53,8 @@ Copy the latest version of the `fmslogs` file to a directory in user's command P
 
 * macOS: `sudo curl -o /usr/local/bin/fmslogs https://raw.githubusercontent.com/beezwax/fmslogs/refs/heads/main/fmslogs && sudo chmod +x /usr/local/bin/fmslogs`
 * Ubuntu: `sudo curl -o /usr/bin/fmslogs https://raw.githubusercontent.com/beezwax/fmslogs/refs/heads/main/fmslogs && sudo chmod +x /usr/bin/fmslogs`
+
+Requires Python 3.9 or newer.
 
 ---
 
