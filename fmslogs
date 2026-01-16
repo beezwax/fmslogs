@@ -577,6 +577,16 @@ def check_endpoint_status (name: str, host: str, endpoint: str, expectedStatus: 
 						print (': Error %s' % match.group(1))
 				else:
 					print (': Error, Result Missing')
+			elif endpoint.startswith ('/fmi/data'):
+				if body.startswith ('{"response":{"productInfo"'):
+					print (': Responding')
+				else:
+					print ('Error, unexpected response')
+			elif endpoint.startswith ('/fmi/odata'):
+				if body.startswith ('{"@context": "https'):
+					print (': Responding')
+				else:
+					print ('Error, unexpected response')
 			else:
 				print (': Responding')
 			result_flag = True
