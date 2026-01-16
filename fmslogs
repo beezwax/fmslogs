@@ -554,7 +554,7 @@ def calc_row_metrics (num_logs, log_lines_count_val) -> tuple:
 
 def check_endpoint_status (name: str, host: str, endpoint: str, expectedStatus: int, method='GET', port=80, useSSL=False) -> bool:
 	"""
-	Check for expected status result for the given endpoint.
+	Check for expected status result for the given endpoint and print the result.
 	"""
 	result_flag = False
 	print ('Checking', name, end='')
@@ -580,16 +580,18 @@ def check_endpoint_status (name: str, host: str, endpoint: str, expectedStatus: 
 			elif endpoint.startswith ('/fmi/data'):
 				if body.startswith ('{"response":{"productInfo"'):
 					print (': Responding')
+					result_flag = True
 				else:
 					print ('Error, unexpected response')
 			elif endpoint.startswith ('/fmi/odata'):
 				if body.startswith ('{"@context": "https'):
 					print (': Responding')
+					result_flag = True
 				else:
 					print ('Error, unexpected response')
 			else:
 				print (': Responding')
-			result_flag = True
+				result_flag = True
 		else:
 			if response.reason:
 				print (':', response.reason)
@@ -628,7 +630,6 @@ def print_tls_version (host: str, port=443) -> bool:
 		print ('  ', e)
 	finally:
 		sock.close()
-	
 	return return_flag
 
         
@@ -675,7 +676,8 @@ def check_connectivity() -> str:
 	except TimeoutError:
 		print ('HTTPS connection timed out')
 	else:
-		print_certificate_info ('External Web', extern_addr)
+		print ('Web Certificate:', end='')
+		print_certificate_info (extern_addr)
 	print ()
 	print ('=== Connectivity Tests ===')
 	
