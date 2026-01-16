@@ -34,6 +34,7 @@ Design Goals:
 
 Current functionality with major issues:
 - `-b` or `--begin`: only working with durations (eg, 'd' or '1d' for 1 day)
+- `-B` or `--backups`: may list backup sets twice if target dir is used more than once but using different path
 - `-c` or `--check-connectivity`: VPN connection may confuse tests
 - `-m` or `--merge`: not working
 - `-S` or `--set`: not working except for `enable/disable debuglogging`
@@ -41,7 +42,6 @@ Current functionality with major issues:
 - `--ssh`: not implmented
 - `-t` or `--tail`: does not print current log segment before starting to follow/tail
 - nginx/apache/IIS: not fully implemented
-- using a VPN can cause the connectivity tests to fail.
 
 ---
 

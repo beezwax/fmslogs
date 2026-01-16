@@ -696,6 +696,8 @@ def check_connectivity() -> str:
 	check_endpoint_status ('CWP - wpem - External', extern_addr, '/fmi/mwpem/', 400, port=443, useSSL=True)
 
 	# DATA API
+	# TODO: check result more closely for result below:
+	# {"response":{"productInfo":{"name":"FileMaker Data API Engine","dateFormat":"MM/dd/yyyy","timeFormat":"HH:mm:ss","timeStampFormat":"MM/dd/yyyy HH:mm:ss"}},"messages":[{"code":"0","message":"OK"}]}
 	dapiEndpoint = '/fmi/data/vLatest/productInfo'
 	check_endpoint_status ('Data API - Internal', intern_addr, dapiEndpoint, 200, port=3000)
 	check_endpoint_status ('Data API - External', extern_addr, dapiEndpoint, 200, port=443, useSSL=True)
@@ -705,6 +707,8 @@ def check_connectivity() -> str:
 	check_tcp_status ('JDBC - External', extern_addr, 2399)
 	
 	# ODATA API
+	# TODO: check result more closely for result below:
+	# {"@context": "https://localhost/fmi/odata/v4/$metadata","value": []}
 	odataEndpoint = '/fmi/odata/v4'
 	check_endpoint_status ('OData API - Internal', intern_addr, odataEndpoint, 401, port=3001)
 	check_endpoint_status ('OData API - External', extern_addr, odataEndpoint, 401, port=443, useSSL=True)
@@ -1977,14 +1981,14 @@ def print_net_status():
 	for line in open_ports:
 		#print (items[0],items[4],items[8])
 		if line[0] == 'L':
-			print('{line[1]:16}  {line[2]:<4}  {line[3]:<15}')
+			print(f'{line[1]:16}  {line[2]:<4}  {line[3]:<15}')
 
 	print ()
 	print ('CONNECTIONS')
 	print ('PROCESS           VERS  CONNECTION')
 	for line in open_ports:
 		if line[0] == 'E':
-			print('{line[1]:16}  {line[2]:<4}  {line[3]:<15}')
+			print(f'{line[1]:16}  {line[2]:<4}  {line[3]:<15}')
 
 	try:
 		response = urllib.request.urlopen('http://checkip.amazonaws.com', timeout=5)
