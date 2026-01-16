@@ -34,7 +34,7 @@ fmslogs -s enable topcall  # enable TopCall.log
 Reset repo:  git fetch origin main; git reset --hard origin/main
 """
 
-VERSION = "0.33 - 2026-01-13"
+VERSION = "0.34 - 2026-01-15"
 
 TIMESTAMP_START = None
 FILTER_REGEX = None
@@ -676,7 +676,7 @@ def check_connectivity() -> str:
 	except TimeoutError:
 		print ('HTTPS connection timed out')
 	else:
-		print ('Web Certificate:', end='')
+		print ('Web Certificate:')
 		print_certificate_info (extern_addr)
 	print ()
 	print ('=== Connectivity Tests ===')
@@ -1105,6 +1105,27 @@ def follow_file(some_file):
 						yield line + '\n'
 		except IOError:
 			yield ''
+		
+
+def get_apache_version() -> str:
+	"""
+	Run the httpd command and extract the version info.
+	"""
+	if platform.system() == 'Darwin':
+		apache_path = '/usr/sbin/httpd'
+	elif platform.system() == 'Linux':
+		apache_path = '/usr/sbin/apache2'
+	else:
+		return 'N/A'
+
+	try:
+		httpd_out_lines = subprocess.run(
+			['/usr/sbin/httpd', '-v'],
+			capture_output=True,
+			text=True).stdout.split('\n')
+		return re.search (r'Apache/(.*) ', httpd_out_lines[0]).group(1)
+	except FileNotFoundError:
+		return 'Apache not at expected path'
 
 
 #
@@ -1128,6 +1149,32 @@ def get_folder_size(path='.', exclude_dir=None) -> int:
 			return -1
 
 	return total
+
+#
+#	g e t _ n g i n x _ v e r s i o n
+#
+
+def get_nginx_version() -> str:
+
+	if platform.system() == 'Linux' or platform.system() == 'Windows':
+		if platform.system() == 'Linux':
+			nginx_path = '/usr/sbin/nginx'
+		else:
+			nginx_path = 'C:\\Programs\\'
+		
+		try:
+			nginx_out = subprocess.run(
+				[nginx_path, '-v'],
+				capture_output=True,
+				text=True,
+				check=False).stderr
+			# nginx version: nginx/1.28.0\n
+			return nginx_out.split ('/')[1][:-1]
+		except FileNotFoundError:
+			return 'N/A'
+	else:
+		return 'N/A'
+
 
 #
 #	g e t _ s u b f o l d e r _ n a m e s
@@ -1294,7 +1341,6 @@ def get_fms_version() -> str:
 		return 'not implemented'
 	
 	return 'Unknown platform'
-
 
 def get_vaadin_version() -> str:
 	"""
@@ -1570,30 +1616,6 @@ def process_info ():
 
 	for proc in ps_result:
 		print (proc)
-
-
-#
-#	r e a d _ t a i l
-#
-
-def read_tail (file_path: str, lines_from_end: int) -> list:
-	"""
-	Scan lines in file, return up to lines_from_end line numbers from the end of file.
-	Line numbers are base 1 for use with linecache.getline.
-	"""
-
-	check_file_validity (file_path)
-	line_num = 1
-	matching = []
-
-	while True:
-		line = linecache.getline (file_path, line_num)
-		if line == '': break
-		matching.append (line_num)
-		line_num += 1
-
-	#print ('line_num:',line_num, 'matching:',len (matching))
-	return matching [-lines_from_end:]
 
 
 #
@@ -2170,6 +2192,8 @@ def print_version():
 	
 	print ('FMS:', get_fms_version())
 	
+	print ('Apache:', get_apache_version())
+
 	# JAVA
 	try:
 		if platform.system() == 'Darwin':
@@ -2189,6 +2213,8 @@ def print_version():
 	except FileNotFoundError:
 		print ('Java: <missing>')
 	
+	print ('NGINX:', get_nginx_version())
+
 	# NODE.JS
 	
 	if platform.system() in ['Darwin', 'Linux']:
@@ -2216,49 +2242,36 @@ def print_version():
 				text=True,
 				check=False).stdout.split()
 		print ('OpenSSL:',open_ssl_words[1],open_ssl_words[2])
-	
-	# APACHE/NGINX/IIS
-	
-	if platform.system() == 'Linux' or platform.system() == 'Windows':
-		if platform.system() == 'Linux':
-			nginx_path = '/usr/sbin/nginx'
-		else:
-			nginx_path = 'C:\\Programs\\'
-		
-		try:
-			nginx_out = subprocess.run(
-				[nginx_path, '-v'],
-				capture_output=True,
-				text=True,
-				check=False).stderr
-			# nginx version: nginx/1.28.0\n
-			nginx_vers = nginx_out.split ('/')[1][:-1]
-		except FileNotFoundError:
-			nginx_vers = 'not present'
-		
-		print ('NGINX:',nginx_vers)
-	
-	if platform.system() == 'Darwin':
-		httpd_path = '/usr/sbin/httpd'
-		try:
-			httpd_out = subprocess.run(
-				[httpd_path, '-v'],
-				capture_output=True,
-				text=True,
-				check=False).stdout
-			# Server version: Apache/2.4.62 (Unix)
-			# Server built:   Nov  8 2025 20:07:11
-			httpd_vers_line = httpd_out.split('\n')[0]
-			httpd_vers = httpd_vers_line.split('/')[1].split()[0]
-		except FileNotFoundError:
-			httpd_vers = 'not present'
-		print ('Apache:',httpd_vers)
-		
+			
 	if platform.system() == 'Windows':
 		print ('IIS: ')
-	
+
 	print ('Vaadin:', get_vaadin_version())
 	print ()
+
+
+#
+#	r e a d _ t a i l
+#
+
+def read_tail (file_path: str, lines_from_end: int) -> list:
+	"""
+	Scan lines in file, return up to lines_from_end line numbers from the end of file.
+	Line numbers are base 1 for use with linecache.getline.
+	"""
+
+	check_file_validity (file_path)
+	line_num = 1
+	matching = []
+
+	while True:
+		line = linecache.getline (file_path, line_num)
+		if line == '': break
+		matching.append (line_num)
+		line_num += 1
+
+	#print ('line_num:',line_num, 'matching:',len (matching))
+	return matching [-lines_from_end:]
 
 
 #
