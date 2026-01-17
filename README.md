@@ -1,5 +1,5 @@
 # fmslog
-## Display FileMaker Server logs & processes
+## Display FileMaker Server logs & resource usage
 
 Some things that it does that using just tail, head, or Get-Content don't:
 - displays headers for columns, even if not showing first row
@@ -13,8 +13,7 @@ Some things that it does that using just tail, head, or Get-Content don't:
 - connectivity tests for 10 different FMS endpoints
 
 Design Goals:
-- no install dependencies other than Python and its core modules
-- just a single file to be copied onto server
+- very simple installation
 - support all three server environments: macOS, Ubuntu, and Windows
 - consolidates access to various logs
 - no waiting for logs to import
@@ -42,7 +41,7 @@ Current functionality with major issues:
 - `-m` or `--merge`: not implemented
 - `-S` or `--set`: not working except for `enable/disable debuglogging`
 - `-s` or `--succinct`: partially implemented
-- `--ssh`: not implmented
+- `--ssh`: not implemented
 - `-t` or `--tail`: does not print current log segment before starting to follow/tail
 - nginx/apache/IIS: log parsing not fully implemented
 
