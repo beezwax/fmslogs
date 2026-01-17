@@ -11,6 +11,7 @@ Some things that it does that using just tail, head, or Get-Content don't:
 - network ports in use
 - sizes of database directories
 - connectivity tests for 10 different FMS endpoints
+- list versions of FMS components (NodeJS, Tomcat, etc.)
 
 Design Goals:
 - very simple installation
@@ -112,8 +113,8 @@ Start printing logs on or after the given duration. Durations are an optional nu
 - 'd': days since midnight today (e.g., '2d' would be from midnight yesterday)
 
 ### -C, --check-connectivity
-Verify basic connectivity to various server components, and display SSL TLS version and hostnames. Where possible, both internal and external interfaces are checked, since
-external connections are routed via a reverse proxy through the web server. Also see the related -N/--network option.
+Verify connectivity to various server components, and display SSL TLS version and hostnames. Where possible, both internal and external interfaces are checked, since
+external connections are routed via a reverse proxy through the web server (Apache, IIS, NGINX). Also see the related -N/--network option.
 
 ### -D, --data
 Using values based on the last relevant message in the Event log, display the current database directories being used and their sizes, splitting out any

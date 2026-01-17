@@ -26,6 +26,7 @@ POSSIBLE NEW OPTIONS
 	list crash reports
 	remote/external log source via SSH
 	for succinct mode, change 'Information' to 'Info' and 'Warning' to 'Warn' (Error will then be longest)
+	"go directory" function
 
 EXAMPLES OF UNIMPLEMENTED USAGE
 fmslog --ssh simon@server.beezwax.net access  # if using user's default 'SSH key
@@ -69,8 +70,16 @@ DEF_BASE_PATHS = {
 	'Windows': 'C:/Programs/FileMaker/FileMaker Server'
 }
 
+FMS_BIN_SUFFIX = {
+	'Darwin': '/Database Server/bin',
+	'Linux': '/Database Server/bin',
+	'Windows': '/Database Server'
+}
+
 # This may get overridden by user option,
 BASE_PATH = DEF_BASE_PATHS [platform.system()]
+
+FMS_BIN_PATH = BASE_PATH + FMS_BIN_SUFFIX [platform.system()]
 
 DBS_CONFIG_PATH = BASE_PATH + '/Data/Preferences/dbs_config.xml'
 
@@ -552,7 +561,7 @@ def calc_row_metrics (num_logs, log_lines_count_val) -> tuple:
 #	c h e c k _ e n d p o i n t _ s t a t u s
 #
 
-def check_endpoint_status (name: str, host: str, endpoint: str, expectedStatus: int, method='GET', port=80, useSSL=False) -> bool:
+def check_endpoint_status (name: str, host: str, endpoint: str, expected_status: int, method='GET', port=443, useSSL=False) -> bool:
 	"""
 	Check for expected status result for the given endpoint and print the result.
 	"""
@@ -565,13 +574,13 @@ def check_endpoint_status (name: str, host: str, endpoint: str, expectedStatus: 
 	try:
 		conn.request(method, endpoint)
 		response = conn.getresponse()
-		if response.status in (200,202) or response.status == expectedStatus:
+		if response.status in (200,202) or response.status == expected_status:
 			# In some cases we get a 200 or similar, but there is an error in the XML.
 			body = response.read(500).decode('utf-8')
 			if body.startswith ('<?xml '):
 				match = re.search(r'<error code="(\d+)', body)
 				if match:
-					if int (match.group(1)) == expectedStatus:
+					if int (match.group(1)) == expected_status:
 						print ('Responding')
 					else:
 						print_error ('Error %s' % match.group(1))
@@ -668,7 +677,7 @@ def check_connectivity() -> str:
 	# ADMIN CONSOLE
 	fac_endpoint = '/admin-console/signin'
 	check_endpoint_status ('Port 16001, Admin Console - Internal: ', intern_addr, fac_endpoint, 200, port=16001)
-	check_endpoint_status ('Port 443, Admin Console - External: ', extern_addr, fac_endpoint, 200, port=443, useSSL=True)
+	check_endpoint_status ('Port 443, Admin Console - External: ', extern_addr, fac_endpoint, 200, useSSL=True)
 	
 	# ADMIN CONSOLE - WORKER
 	fac_endpoint = '/admin-console/signin'
@@ -679,16 +688,16 @@ def check_connectivity() -> str:
 	check_tcp_status ('Port 9889, CWP', intern_addr, 9889)
 	xmlEndpoint = '/fmi/xml'
 	check_endpoint_status ('Port 16021, CWP - XML - Internal: ', intern_addr, xmlEndpoint, 954, port=16021)
-	check_endpoint_status ('Port 443, CWP - XML - External: ', extern_addr, xmlEndpoint, 954, port=443, useSSL=True)
+	check_endpoint_status ('Port 443, CWP - XML - External: ', extern_addr, xmlEndpoint, 954, useSSL=True)
 	check_endpoint_status ('Port 16002, CWP - wpem - Internal: ', intern_addr, 'fmswpem/', 400, port=16002)
-	check_endpoint_status ('Port 443, CWP - wpem - External: ', extern_addr, '/fmi/mwpem/', 400, port=443, useSSL=True)
+	check_endpoint_status ('Port 443, CWP - wpem - External: ', extern_addr, '/fmi/mwpem/', 400, useSSL=True)
 
 	# DATA API
 	# TODO: check result more closely for result below:
 	# {"response":{"productInfo":{"name":"FileMaker Data API Engine","dateFormat":"MM/dd/yyyy","timeFormat":"HH:mm:ss","timeStampFormat":"MM/dd/yyyy HH:mm:ss"}},"messages":[{"code":"0","message":"OK"}]}
 	dapiEndpoint = '/fmi/data/vLatest/productInfo'
 	check_endpoint_status ('Port 3000, Data API - Internal: ', intern_addr, dapiEndpoint, 200, port=3000)
-	check_endpoint_status ('Port 443, Data API - External: ', extern_addr, dapiEndpoint, 200, port=443, useSSL=True)
+	check_endpoint_status ('Port 443, Data API - External: ', extern_addr, dapiEndpoint, 200, useSSL=True)
 	
 	# JDBC
 	check_tcp_status ('Port 2399, JDBC - Internal: ', intern_addr, 2399)
@@ -699,17 +708,17 @@ def check_connectivity() -> str:
 	# {"@context": "https://localhost/fmi/odata/v4/$metadata","value": []}
 	odataEndpoint = '/fmi/odata/v4'
 	check_endpoint_status ('Port 3001, OData API - Internal: ', intern_addr, odataEndpoint, 401, port=3001)
-	check_endpoint_status ('Port 443, OData API - External: ', extern_addr, odataEndpoint, 401, port=443, useSSL=True)
+	check_endpoint_status ('Port 443, OData API - External: ', extern_addr, odataEndpoint, 401, useSSL=True)
 
 	# docws/fmws handler
 	xmlEndpoint = '/fmws/serverinfo'
 	check_endpoint_status ('Port 1895, CWP - XML - Internal: ', intern_addr, xmlEndpoint, 954, port=1895)
-	check_endpoint_status ('Port 443, CWP - XML - External: ', extern_addr, xmlEndpoint, 954, port=443, useSSL=True)	# this may get removed
+	check_endpoint_status ('Port 443, CWP - XML - External: ', extern_addr, xmlEndpoint, 954, useSSL=True)	# this may get removed
 
 	# WEBD
 	webdEndpoint = '/fmi/webd/'
 	check_endpoint_status ('Port 16021, WebDirect - Internal: ', intern_addr, webdEndpoint, 200, port=16021)
-	check_endpoint_status ('Port 443, WebDirect - External: ', extern_addr, webdEndpoint, 200, port=443, useSSL=True)
+	check_endpoint_status ('Port 443, WebDirect - External: ', extern_addr, webdEndpoint, 200, useSSL=True)
 
 	# alternate: curl -vk -X DELETE https://127.0.0.1/fmi/admin/api/v2/user/auth/abcdef0123456789
 	print ()
@@ -741,10 +750,16 @@ def claris_config_remove(target_dir: str) -> bool:
 	"""
 
 	config_path = os.path.join(target_dir, "ClarisConfig.json")
+	backup_path = config_path + '.bak'
 	print ()
 
 	try:
-		os.remove(config_path)
+		os.remove(backup_path)
+	except FileNotFoundError:
+		pass
+	
+	try:
+		shutil.move(config_path, backup_path)
 	except FileNotFoundError:
 		print ('No ClarisConfig.json file was found to remove.')
 		print ()
@@ -755,7 +770,7 @@ def claris_config_remove(target_dir: str) -> bool:
 		print ()
 		return False
 
-	print ('The ClarisConfig.json file has been removed.')
+	print ('The ClarisConfig.json file has been disabled.')
 	print ('Restart FMS to apply the change.')
 	print ()
 	return True
@@ -1028,11 +1043,11 @@ def fmsadmin_toggle_log (fm_logname: str, enable_flag: bool, user: str, password
 	if fm_logname == 'debug':
 		# This is a special case where we write or remove the ClarisConfig.json file.
 		if enable_flag:
-			claris_config_write (get_fms_root_path())
+			claris_config_write (FMS_BIN_PATH)
 		else:
-			claris_config_remove (get_fms_root_path())
+			claris_config_remove (FMS_BIN_PATH)
 		return True
-	
+
 	if enable_flag:
 		verb_str = 'enable'
 	else:
@@ -1045,7 +1060,7 @@ def fmsadmin_toggle_log (fm_logname: str, enable_flag: bool, user: str, password
 		check=False)
 
 	print (fmsadmin_proc.stdout)
-	return (fmsadmin_proc.returncode == 0)
+	return fmsadmin_proc.returncode == 0
 
 	
 def follow_file(some_file):
@@ -1058,14 +1073,14 @@ def follow_file(some_file):
 	first_call = True
 	while True:
 		try:
-			with open(some_file) as input:
+			with open(some_file) as tfile:
 				if first_call:
-					input.seek(0, 2)
+					tfile.seek(0, 2)
 					first_call = False
-				latest_data = input.read()
+				latest_data = tfile.read()
 				while True:
 					if '\n' not in latest_data:
-						latest_data += input.read()
+						latest_data += tfile.read()
 						if '\n' not in latest_data:
 							yield ''
 							if not os.path.isfile(some_file):
@@ -1075,7 +1090,7 @@ def follow_file(some_file):
 					if latest_data[-1] != '\n':
 						latest_data = latest_lines[-1]
 					else:
-						latest_data = input.read()
+						latest_data = tfile.read()
 					for line in latest_lines[:-1]:
 						yield line + '\n'
 		except IOError:
@@ -1321,7 +1336,7 @@ def get_network_address() -> str:
 
 	eventPath = get_log_path ('event')
 	match = scan_file_last_match (eventPath, r'Network address.*: (.*)')
-	if match == None:
+	if not match:
 		return 'No matches in current Event.log'
 
 	return match
@@ -2415,15 +2430,15 @@ def read_tail_filtered_and_time (file_path: str, lines_from_end: int) -> list:
 	From there, then return line numbers from the end of file that match the text filter.
 	Line numbers are base 1 for use with linecache.getline.
 	"""
-	
+
 	check_file_validity (file_path)
 	matching = []
-	
+
 	# First, find the first line containing some kind of message date
 	# that is on or after our start date.
-	
+
 	line_num = find_first_timestamp (file_path, TIMESTAMP_START)
-	
+
 	if line_num > 0:
 		# Now, filter anything after start date.
 		while True:
@@ -2434,7 +2449,7 @@ def read_tail_filtered_and_time (file_path: str, lines_from_end: int) -> list:
 			if FILTER_REGEX.search (line):
 				matching.append (line_num)
 			line_num += 1
-	
+
 	# Cut result down to no more than requested lines from end of file.
 	return matching [-lines_from_end:]
 
