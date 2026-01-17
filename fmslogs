@@ -572,67 +572,42 @@ def check_endpoint_status (name: str, host: str, endpoint: str, expectedStatus: 
 				match = re.search(r'<error code="(\d+)', body)
 				if match:
 					if int (match.group(1)) == expectedStatus:
-						print (': Responding')
+						print ('Responding')
 					else:
-						print (': Error %s' % match.group(1))
+						print_error ('Error %s' % match.group(1))
 				else:
-					print (': Error, Result Missing')
+					print_error ('Error, result missing')
 			elif endpoint.startswith ('/fmi/data'):
 				if body.startswith ('{"response":{"productInfo"'):
-					print (': Responding')
+					print ('Responding')
 					result_flag = True
 				else:
-					print ('Error, unexpected response')
+					print_error ('Error, unexpected response')
 			elif endpoint.startswith ('/fmi/odata'):
 				if body.startswith ('{"@context": "https'):
-					print (': Responding')
+					print ('Responding')
 					result_flag = True
 				else:
-					print ('Error, unexpected response')
+					print_error ('Error, unexpected response')
 			else:
-				print (': Responding')
+				print ('Responding')
 				result_flag = True
 		else:
 			if response.reason:
-				print (':', response.reason)
+				print (response.reason)
 			else:
-				print (': Error, connection failed')
+				print_error ('Error, connection failed')
 	except http.client.HTTPException as e:
-		print (':', e)
+		print_error (str (e))
+	except ConnectionRefusedError as e:
+		print_error (str (e))
 	except Exception as e:
-		print (':', e)
+		print_error (str (e))
 	finally:
 		conn.close()
 	return result_flag
 
 
-#
-#	p r i n t _ t l s _ v e r s i o n
-#
-
-def print_tls_version (host: str, port=443) -> bool:
-	"""
-	Create connection to server and print the TLS version that was used.
-	"""
-	
-	return_flag = False
-	context =  ssl.create_default_context()
-	context.check_hostname = False
-	context.verify_mode = ssl.CERT_NONE
-	try:
-		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		sock.settimeout (4)
-		ssock = context.wrap_socket(sock, server_hostname=host)
-		ssock.connect ((host, port)) # we are ignoring the connection value
-		return_flag = True
-		print('SSL/TLS version:', ssock.version())
-	except ssl.SSLError as e:
-		print ('  ', e)
-	finally:
-		sock.close()
-	return return_flag
-
-        
 def check_tcp_status (name: str, host: str, port):
 	"""
 	Print the result of testing if TCP connection can be opened to the given host's port.
@@ -647,9 +622,9 @@ def check_tcp_status (name: str, host: str, port):
 		if result == 0:
 			print (': Responding')
 		else:
-			print (f': Error {result}, Could not open port {port}')
+			print_error (f': Error {result}, Could not open port {port}')
 	except socket.gaierror:
-		print (f': Could not resolve host "{host}"')
+		print_error (f': Could not resolve host "{host}"')
 	finally:
 		sock.close()
 
@@ -687,54 +662,54 @@ def check_connectivity() -> str:
 	
 	# ADMIN API
 	adminEndpoint = '/fmi/admin/api/v2/server/metadata'
-	check_endpoint_status ('Port 16001, Admin API - Internal', intern_addr, adminEndpoint, 400, method='POST', port=16001)
-	check_endpoint_status ('Port 443, Admin API - External', extern_addr, adminEndpoint, 400, method='POST', port=443, useSSL=True)
+	check_endpoint_status ('Port 16001, Admin API - Internal: ', intern_addr, adminEndpoint, 400, method='POST', port=16001)
+	check_endpoint_status ('Port 443, Admin API - External: ', extern_addr, adminEndpoint, 400, method='POST', port=443, useSSL=True)
 	
 	# ADMIN CONSOLE
 	fac_endpoint = '/admin-console/signin'
-	check_endpoint_status ('Port 16001, Admin Console - Internal', intern_addr, fac_endpoint, 200, port=16001)
-	check_endpoint_status ('Port 443, Admin Console - External', extern_addr, fac_endpoint, 200, port=443, useSSL=True)
+	check_endpoint_status ('Port 16001, Admin Console - Internal: ', intern_addr, fac_endpoint, 200, port=16001)
+	check_endpoint_status ('Port 443, Admin Console - External: ', extern_addr, fac_endpoint, 200, port=443, useSSL=True)
 	
 	# ADMIN CONSOLE - WORKER
 	fac_endpoint = '/admin-console/signin'
-	check_endpoint_status ('Port 16003, Web Worker - Internal', intern_addr, fac_endpoint, 200, port=16003)
-	check_endpoint_status ('Port 16003, Web Worker - External', extern_addr, fac_endpoint, 200, port=16003)
+	check_endpoint_status ('Port 16003, Web Worker - Internal: ', intern_addr, fac_endpoint, 200, port=16003)
+	check_endpoint_status ('Port 16003, Web Worker - External: ', extern_addr, fac_endpoint, 200, port=16003)
 	
 	# CATALINA/CWP
 	check_tcp_status ('Port 9889, CWP', intern_addr, 9889)
 	xmlEndpoint = '/fmi/xml'
-	check_endpoint_status ('Port 16021, CWP - XML - Internal', intern_addr, xmlEndpoint, 954, port=16021)
-	check_endpoint_status ('Port 443, CWP - XML - External', extern_addr, xmlEndpoint, 954, port=443, useSSL=True)
-	check_endpoint_status ('Port 16002, CWP - wpem - Internal', intern_addr, 'fmswpem/', 400, port=16002)
-	check_endpoint_status ('Port 443, CWP - wpem - External', extern_addr, '/fmi/mwpem/', 400, port=443, useSSL=True)
+	check_endpoint_status ('Port 16021, CWP - XML - Internal: ', intern_addr, xmlEndpoint, 954, port=16021)
+	check_endpoint_status ('Port 443, CWP - XML - External: ', extern_addr, xmlEndpoint, 954, port=443, useSSL=True)
+	check_endpoint_status ('Port 16002, CWP - wpem - Internal: ', intern_addr, 'fmswpem/', 400, port=16002)
+	check_endpoint_status ('Port 443, CWP - wpem - External: ', extern_addr, '/fmi/mwpem/', 400, port=443, useSSL=True)
 
 	# DATA API
 	# TODO: check result more closely for result below:
 	# {"response":{"productInfo":{"name":"FileMaker Data API Engine","dateFormat":"MM/dd/yyyy","timeFormat":"HH:mm:ss","timeStampFormat":"MM/dd/yyyy HH:mm:ss"}},"messages":[{"code":"0","message":"OK"}]}
 	dapiEndpoint = '/fmi/data/vLatest/productInfo'
-	check_endpoint_status ('Port 3000, Data API - Internal', intern_addr, dapiEndpoint, 200, port=3000)
-	check_endpoint_status ('Port 443, Data API - External', extern_addr, dapiEndpoint, 200, port=443, useSSL=True)
+	check_endpoint_status ('Port 3000, Data API - Internal: ', intern_addr, dapiEndpoint, 200, port=3000)
+	check_endpoint_status ('Port 443, Data API - External: ', extern_addr, dapiEndpoint, 200, port=443, useSSL=True)
 	
 	# JDBC
-	check_tcp_status ('Port 2399, JDBC - Internal', intern_addr, 2399)
-	check_tcp_status ('Port 2399, JDBC - External', extern_addr, 2399)
+	check_tcp_status ('Port 2399, JDBC - Internal: ', intern_addr, 2399)
+	check_tcp_status ('Port 2399, JDBC - External: ', extern_addr, 2399)
 	
 	# ODATA API
 	# TODO: check result more closely for result below:
 	# {"@context": "https://localhost/fmi/odata/v4/$metadata","value": []}
 	odataEndpoint = '/fmi/odata/v4'
-	check_endpoint_status ('Port 3001, OData API - Internal', intern_addr, odataEndpoint, 401, port=3001)
-	check_endpoint_status ('Port 443, OData API - External', extern_addr, odataEndpoint, 401, port=443, useSSL=True)
+	check_endpoint_status ('Port 3001, OData API - Internal: ', intern_addr, odataEndpoint, 401, port=3001)
+	check_endpoint_status ('Port 443, OData API - External: ', extern_addr, odataEndpoint, 401, port=443, useSSL=True)
 
 	# docws/fmws handler
 	xmlEndpoint = '/fmws/serverinfo'
-	check_endpoint_status ('Port 1895, CWP - XML - Internal', intern_addr, xmlEndpoint, 954, port=1895)
-	check_endpoint_status ('Port 443, CWP - XML - External', extern_addr, xmlEndpoint, 954, port=443, useSSL=True)	# this may get removed
+	check_endpoint_status ('Port 1895, CWP - XML - Internal: ', intern_addr, xmlEndpoint, 954, port=1895)
+	check_endpoint_status ('Port 443, CWP - XML - External: ', extern_addr, xmlEndpoint, 954, port=443, useSSL=True)	# this may get removed
 
 	# WEBD
 	webdEndpoint = '/fmi/webd/'
-	check_endpoint_status ('Port 16021, WebDirect - Internal', intern_addr, webdEndpoint, 200, port=16021)
-	check_endpoint_status ('Port 443, WebDirect - External', extern_addr, webdEndpoint, 200, port=443, useSSL=True)
+	check_endpoint_status ('Port 16021, WebDirect - Internal: ', intern_addr, webdEndpoint, 200, port=16021)
+	check_endpoint_status ('Port 443, WebDirect - External: ', extern_addr, webdEndpoint, 200, port=443, useSSL=True)
 
 	# alternate: curl -vk -X DELETE https://127.0.0.1/fmi/admin/api/v2/user/auth/abcdef0123456789
 	print ()
@@ -1150,6 +1125,34 @@ def get_folder_size(path='.', exclude_dir=None) -> int:
 
 	return total
 
+def get_java_version() -> bool:
+	"""
+	If present, get the Java version that FMS is likely using.
+	(there's a chance it has been installed in non-default location)
+	If not found/executable, returns None.
+	"""
+	java_version = None
+	try:
+		if platform.system() == 'Darwin':
+			java_words = subprocess.run(
+				[BASE_PATH + '/Web Publishing/java/bin/java', '-version'],
+				capture_output=True,
+				text=True,
+				check=False).stderr.split('"')
+			java_version = java_words[1]
+		elif platform.system() == 'Linux':
+			java_words = subprocess.run(
+				['/usr/bin/java', '-version'],
+				capture_output=True,
+				text=True,
+				check=False).stderr.split('"')
+			java_version = java_words[1]
+	except FileNotFoundError:
+		java_version = None
+
+	return java_version
+
+
 #
 #	g e t _ n g i n x _ v e r s i o n
 #
@@ -1190,6 +1193,42 @@ def get_subfolder_names (folder: str) -> list:
 	except FileNotFoundError:
 		return None
 
+
+#
+#	g e t _ t o m c a t _ v e r s i o n
+#
+
+def get_tomcat_version() -> str:
+	"""
+	If Java is available, get the installed Tomcat/Catalina version.
+	"""
+	tomcat_out = None
+	
+	if platform.system() == 'Darwin':
+		tomcat_out = subprocess.run(
+			[BASE_PATH + '/Web Publishing/java/bin/java', '-cp', '/Library/FileMaker Server/Web Publishing/publishing-engine/jwpc-tomcat/lib/catalina.jar', 'org.apache.catalina.util.ServerInfo'],
+			capture_output=True,
+			text=True,
+			check=False).stdout
+	if platform.system() == 'Linux':
+		tomcat_out = subprocess.run(
+			[BASE_PATH + '/usr/bin/java', '-cp', '/opt/FileMaker/FileMaker Server/Web Publishing/publishing-engine/jwpc-tomcat/lib/catalina.jar', 'org.apache.catalina.util.ServerInfo'],
+			capture_output=True,
+			text=True,
+			check=False).stdout
+		
+	if tomcat_out:
+		return re.search (r'Server number:  (.*)', tomcat_out).group(1)
+	else:
+		None
+
+	# WINDOWS:
+	# & "C:\Program Files\FileMaker\FileMaker Server\Web Publishing\java\bin\java" -cp "C:\Program Files\FileMaker\FileMaker Server\Web Publishing\publishing-engine\jwpc-tomcat\lib\catalina.jar" org.apache.catalina.util.ServerInfo
+
+
+#
+#	g e t _ d b _ d i r e c t o r i e s
+#
 
 def get_db_directories() -> tuple:
 	"""
@@ -1412,16 +1451,17 @@ def init_parser() -> argparse.ArgumentParser:
 
 	parser.add_argument('-B', '--backups', action='store_true', help='list paths & sizes of backup sets')
 	parser.add_argument('-b', '--begin', nargs=1, help='start at first message on or after time or time interval')
-	parser.add_argument('-c', '--check-connectivity', dest='check_connectivity', action='store_true', help='check connectivity of API endpoints')
+	parser.add_argument('-C', '--check-connectivity', dest='check_connectivity', action='store_true', help='check connectivity of API endpoints')
 	parser.add_argument('-d', '--databases', action='store_true', help='display database, container, document, and temp directory info')
 	parser.add_argument('-e', '--edit', nargs=1, help='open the log file using the command defined by $EDITOR')
 	parser.add_argument('-f', '--filter', nargs=1, help='only return lines matching regex expression')
 	parser.add_argument('-h', '--head', action='store_true', help='display the first lines of log files')
 	parser.add_argument('-H', '--headers-off', dest='headers_off', action='store_true', help='turn off headers for all logs')
 	parser.add_argument('--help', action='help', help='display command details')
-	parser.add_argument('-l', '--list', action='store_true', help='list all log files, including size, date created & modified, sorted by modification time')
+	parser.add_argument('-L', '--list', action='store_true', help='list all log files, including size, date created & modified, sorted by modification time')
 	parser.add_argument('-m', '--merge', action='store_true', help='combine output of two or more logs based on the message timestamps')
 	parser.add_argument('-n', '--number', nargs=1, default=['1s'], help='range or number of lines to print')
+	parser.add_argument('-N', '--network', action='store_true', help='list connections and their status') # TODO: throwing "expected log name" error
 	parser.add_argument('-p', '--process-info', action='store_true', dest='process_info', help='list FMS related processes and their stats')
 	parser.add_argument('-P', '--password', help='FMS console')
 	parser.add_argument('-S', '--set', nargs=2, help='change log configuration option')
@@ -1431,7 +1471,6 @@ def init_parser() -> argparse.ArgumentParser:
 	parser.add_argument('--tail', dest='tail', type=float, nargs=1, default=[-1.0], help='wait for any new messages, specifying number of seconds to wait for each file')
 	parser.add_argument('--truncate', action='store_true', help='cut off any output if beyond width of screen')
 	parser.add_argument('-U', '--user', help='FMS console or SSH account name')
-	parser.add_argument('-N', '--network', action='store_true', help='list connections and their status') # TODO: throwing "expected log name" error
 	parser.add_argument('-V', '--version', action='store_true', help='version info for fmslogs and FMS')
 	# Hack to avoid error if there is only an option specified but no positional argument
 	parser.add_argument('logs', nargs='*', help='log name to display')
@@ -1725,6 +1764,13 @@ def print_fmtmp_info():
 		path_label = '/tmp/FMTMPFM* (0)'
 
 	print (f'{path_label:25} {size_sum:>16,}')
+
+
+def print_error (msg: str):
+	"""
+	Print an error string with emphasis.
+	"""
+	print (TerminalColors.RED + TerminalColors.BOLD + msg + TerminalColors.END)
 
 
 def print_log (log_name: str, count: int):
@@ -2174,6 +2220,33 @@ def print_tail (log_name: str, count: int, header: bool, succinct: bool) -> int:
 
 
 #
+#	p r i n t _ t l s _ v e r s i o n
+#
+
+def print_tls_version (host: str, port=443) -> bool:
+	"""
+	Create connection to server and print the TLS version that was used.
+	"""
+	
+	return_flag = False
+	context =  ssl.create_default_context()
+	context.check_hostname = False
+	context.verify_mode = ssl.CERT_NONE
+	try:
+		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		sock.settimeout (4)
+		ssock = context.wrap_socket(sock, server_hostname=host)
+		ssock.connect ((host, port)) # we are ignoring the connection value
+		return_flag = True
+		print('SSL/TLS version:', ssock.version())
+	except ssl.SSLError as e:
+		print_error ('  ', str (e))
+	finally:
+		sock.close()
+	return return_flag
+
+        
+#
 #	p r i n t _ v e r s i o n
 #
 
@@ -2194,24 +2267,8 @@ def print_version():
 	
 	print ('Apache:', get_apache_version())
 
-	# JAVA
-	try:
-		if platform.system() == 'Darwin':
-			java_words = subprocess.run(
-				[BASE_PATH + '/Web Publishing/java/bin/java', '-version'],
-				capture_output=True,
-				text=True,
-				check=False).stderr.split('"')
-			print ('Java:', java_words[1])
-		elif platform.system() == 'Linux':
-			java_words = subprocess.run(
-				['/usr/bin/java', '-version'],
-				capture_output=True,
-				text=True,
-				check=False).stderr.split('"')
-			print ('Java:', java_words[1])
-	except FileNotFoundError:
-		print ('Java: <missing>')
+	java_str = get_java_version()
+	print ('Java:', java_str)
 	
 	print ('NGINX:', get_nginx_version())
 
@@ -2228,6 +2285,7 @@ def print_version():
 	# OPENSSL
 	
 	if platform.system() == 'Darwin':
+		# check FMS' copy, not the OS one.
 		open_ssl_words = subprocess.run(
 			[BASE_PATH + '/Database Server/bin/openssl','version'],
 			capture_output=True,
@@ -2245,6 +2303,9 @@ def print_version():
 			
 	if platform.system() == 'Windows':
 		print ('IIS: ')
+
+	if java_str:
+		print ('Tomcat:', get_tomcat_version())
 
 	print ('Vaadin:', get_vaadin_version())
 	print ()

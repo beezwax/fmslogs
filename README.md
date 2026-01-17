@@ -72,8 +72,8 @@ positional arguments (log name):
 options:
   -B, --backups             list scheduled backup sets present
   -b, --begin BEGIN         start at first message on or after time or time interval in BEGIN
-  -c, --check-connectivity	test connectivity to FMS components
-  -d, --data                list directories being used for databases, external container data, documents, and temp files
+  -C, --check-connectivity	test connectivity to FMS components
+  -D, --data                list directories being used for databases, external container data, documents, and temp files
   -e, --edit                open the log in a text editor; first try $EDITOR, then GUI editor (macOS), then nano
   -f, --filter FILTER       only return lines matching regex expression FILTER
   -h, --head                display the start of the specified log files instead of its tail
@@ -109,11 +109,11 @@ Start printing logs on or after the given duration. Durations are an optional nu
 - 'h': hours from now
 - 'd': days since midnight today (e.g., '2d' would be from midnight yesterday)
 
-### -c, --check-connectivity
+### -C, --check-connectivity
 Verify basic connectivity to various server components, and display SSL TLS version and hostnames. Where possible, both internal and external interfaces are checked, since
 external connections are routed via a reverse proxy through the web server. Also see the related -N/--network option.
 
-### -d, --data
+### -D, --data
 Using values based on the last relevant message in the Event log, display the current database directories being used and their sizes, splitting out any
 optional external container directories.
 
