@@ -2,9 +2,9 @@
 # -*- Mode:Python; indent-tabs-mode:nil; tab-width:3; encoding:utf-8 -*-
 
 """
-Filename: fmslogs.py
+Filename: fmslog.py
 Author: Simon Brown on 10/15/2025
-Purpose: Display FileMaker Server logs and change logging options.
+Purpose: Display FileMaker Server logs, change logging options, and get resource usage.
 """
 
 import argparse, curses, datetime
@@ -28,8 +28,8 @@ POSSIBLE NEW OPTIONS
 	for succinct mode, change 'Information' to 'Info' and 'Warning' to 'Warn' (Error will then be longest)
 
 EXAMPLES OF UNIMPLEMENTED USAGE
-fmslogs --ssh simon@server.beezwax.net access  # if using user's default 'SSH key
-fmslogs -s enable topcall  # enable TopCall.log
+fmslog --ssh simon@server.beezwax.net access  # if using user's default 'SSH key
+fmslog -s enable topcall  # enable TopCall.log
 
 Reset repo:  git fetch origin main; git reset --hard origin/main
 """
@@ -751,7 +751,7 @@ def claris_config_remove(target_dir: str) -> bool:
 		return False
 	except PermissionError:
 		print("Error: Could not remove", config_path)
-		print ('Adjust permissions or run fmslogs with elevated privileges.')
+		print ('Adjust permissions or run fmslog with elevated privileges.')
 		print ()
 		return False
 
@@ -793,7 +793,7 @@ def claris_config_write(target_dir: str) -> bool:
 		return True
 	except PermissionError:
 		print("Error: Could not write to", config_path)
-		print ('Adjust permissions or run fmslogs with elevated privileges.')
+		print ('Adjust permissions or run fmslog with elevated privileges.')
 		print ()
 		return False
 	
@@ -1444,7 +1444,7 @@ def init_parser() -> argparse.ArgumentParser:
 	"""Setup parameters used for command interface. Does not attempt to parse."""
 
 	parser = argparse.ArgumentParser(
-		prog='fmslogs',
+		prog='fmslog',
 		add_help=False,
 		formatter_class=argparse.RawDescriptionHelpFormatter,
 		description='View FileMaker Server logs and set logging options.')
@@ -1471,7 +1471,7 @@ def init_parser() -> argparse.ArgumentParser:
 	parser.add_argument('--tail', dest='tail', type=float, nargs=1, default=[-1.0], help='wait for any new messages, specifying number of seconds to wait for each file')
 	parser.add_argument('--truncate', action='store_true', help='cut off any output if beyond width of screen')
 	parser.add_argument('-U', '--user', help='FMS console or SSH account name')
-	parser.add_argument('-V', '--version', action='store_true', help='version info for fmslogs and FMS')
+	parser.add_argument('-V', '--version', action='store_true', help='version info for fmslog and FMS')
 	# Hack to avoid error if there is only an option specified but no positional argument
 	parser.add_argument('logs', nargs='*', help='log name to display')
 	#parser.add_argument('log2', nargs='?', help='additional log to display')
@@ -2256,8 +2256,8 @@ def print_version():
 	"""
 	
 	print ()
-	print ('fmslogs', VERSION)
-	print ('Latest version at: https://github.com/beezwax/fmslogs')
+	print ('fmslog', VERSION)
+	print ('Latest version at: https://github.com/beezwax/fmslog')
 	print ('Questions or comments: info@beezwax.net')
 	print ()
 	

@@ -1,21 +1,23 @@
-# fmslogs
+# fmslog
 ## Display FileMaker Server logs & processes
 
 Some things that it does that using just tail, head, or Get-Content don't:
 - displays headers for columns, even if not showing first row
 - improved formatting, including consistent column alignments
-- quick access to print or open in editor (don't have to type full log path or cd to correct directory)
+- quickly display or open logs in editor (don't have to type full log path)
 - limit messages to those only after a given timestamp or duration
 - lists path, size, and modification dates for all logs
 - optionally truncate lines to avoid line wrap
 - network ports in use
+- sizes of database directories
 - connectivity tests for 10 different FMS endpoints
 
 Design Goals:
-- no install dependencies other than Python, and requiring just a single file to be copied onto server
+- no install dependencies other than Python and its core modules
+- just a single file to be copied onto server
 - support all three server environments: macOS, Ubuntu, and Windows
 - consolidates access to various logs
-- no import step needed
+- no waiting for logs to import
 
 ---
 
@@ -25,6 +27,7 @@ Design Goals:
 * FMS Help - Monitoring FileMaker Server: https://help.claris.com/en/server-help/content/monitor-server.html
 * General Web Publishing Settings for Server: https://support.claris.com/s/answerview?anum=000023506
 * Log Viewer for Claris FileMaker: https://luminfire.com/our-solutions/claris-filemaker-log-viewer/
+* Ports used by FileMaker Server: https://help.claris.com/en/server-installation-configuration-guide/content/ports-used-by-server.html
 * Top Call statistics logging: https://support.claris.com/s/answerview?anum=000025776
 * Tracking activity in log files in FileMaker Server: https://support.claris.com/s/article/Tracking-activity-in-log-files-in-FileMaker-Server-1503692942153
 
@@ -35,13 +38,13 @@ Design Goals:
 Current functionality with major issues:
 - `-b` or `--begin`: only working with durations (eg, 'd' or '1d' for 1 day)
 - `-B` or `--backups`: may list backup sets twice if target dir is used more than once but using different path
-- `-c` or `--check-connectivity`: VPN connection may confuse tests
-- `-m` or `--merge`: not working
+- `-C` or `--check-connectivity`: VPN connection may confuse tests
+- `-m` or `--merge`: not implemented
 - `-S` or `--set`: not working except for `enable/disable debuglogging`
 - `-s` or `--succinct`: partially implemented
 - `--ssh`: not implmented
 - `-t` or `--tail`: does not print current log segment before starting to follow/tail
-- nginx/apache/IIS: not fully implemented
+- nginx/apache/IIS: log parsing not fully implemented
 
 ---
 
@@ -61,8 +64,8 @@ Requires Python 3.9 or newer.
 ## OPTIONS & PARAMETERS
 
 ```
-usage: fmslogs [-b BEGIN] [-e EDIT] [-f FILTER] [-h] [-H] [--help] [-l] [-L] [-m] [-n NUMBER] [-p PASSWORD] [-S SET] [-s] [--ssh SSH] [-t] [--tail TAIL] [--truncate] [-u USER] [-N] [-v] [logs ...]
-               [logname]
+usage: fmslog [-b BEGIN] [-e EDIT] [-f FILTER] [-h] [-H] [--help] [-l] [-L] [-m] [-n NUMBER] [-p PASSWORD] [-S SET] [-s] [--ssh SSH] [-t] [--tail TAIL] [--truncate] [-u USER] [-N] [-v] [logs ...]
+              [logname]
                
 View FileMaker Server logs and set logging options
 
@@ -87,7 +90,7 @@ options:
   -s, --succinct            strip less useful details from log output (partially implemented)
   -t, --tail                wait for any new messages after printing current end of log
   --truncate                cut off any output if beyond width of screen
-  -V, --version             version info for fmslogs and FMS components
+  -V, --version             version info for fmslog and FMS components
 ```
 
 ---
@@ -169,7 +172,7 @@ Use the form `--tail=<seconds>` to set how many seconds to wait between checks f
 Remove any output from the end of the line that would cause a line wrap for the current screen width.
 
 ### -V, --version
-Print version of fmslogs command and FileMaker Server components.
+Print version of fmslog command and FileMaker Server components.
 
 ---
 
