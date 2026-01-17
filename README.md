@@ -52,10 +52,10 @@ Current functionality with major issues:
 
 ### macOS
 
-Copy the latest version of the `fmslogs` file to a directory in user's command PATH:
+Copy the latest version of the `fmslog` file to a directory in user's command PATH:
 
-* macOS: `sudo curl -o /usr/local/bin/fmslogs https://raw.githubusercontent.com/beezwax/fmslogs/refs/heads/main/fmslogs && sudo chmod +x /usr/local/bin/fmslogs`
-* Ubuntu: `sudo curl -o /usr/bin/fmslogs https://raw.githubusercontent.com/beezwax/fmslogs/refs/heads/main/fmslogs && sudo chmod +x /usr/bin/fmslogs`
+* macOS: `sudo curl -o /usr/local/bin/fmslog https://raw.githubusercontent.com/beezwax/fmslog/refs/heads/main/fmslog && sudo chmod +x /usr/local/bin/fmslog`
+* Ubuntu: `sudo curl -o /usr/bin/fmslog https://raw.githubusercontent.com/beezwax/fmslog/refs/heads/main/fmslog && sudo chmod +x /usr/bin/fmslog`
 
 Requires Python 3.9 or newer.
 
