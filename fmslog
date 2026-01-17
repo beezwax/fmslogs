@@ -34,7 +34,7 @@ fmslog -s enable topcall  # enable TopCall.log
 Reset repo:  git fetch origin main; git reset --hard origin/main
 """
 
-VERSION = "0.34 - 2026-01-15"
+VERSION = "0.35 - 2026-01-16"
 
 TIMESTAMP_START = None
 FILTER_REGEX = None
@@ -1189,7 +1189,9 @@ def get_subfolder_names (folder: str) -> list:
 	Does not recurse into subfolders.
 	"""
 	try:
-		return [f.name for f in os.scandir(folder) if f.is_dir()]
+		dir_list = [f.name for f in os.scandir(folder) if f.is_dir()]
+		dir_list.sort()
+		return dir_list
 	except FileNotFoundError:
 		return None
 
@@ -1380,6 +1382,34 @@ def get_fms_version() -> str:
 		return 'not implemented'
 	
 	return 'Unknown platform'
+
+#
+#	g e t _ p r o g r e s s i v e s _ p a t h
+#
+
+def get_progressives_path() -> str:
+	"""
+	Get the directory path for the Progressive Backups folder.
+	"""
+	#  name="IncrementalBackupPath">filelinux:/FileMakerData/Progressive/</key>
+
+	progressives_path = None
+	
+	# There are two forms of the BackupTarget key, depending on where the type is defined.
+	backupRE = re.compile (r'name="IncrementalBackupPath">(.*)</key>')
+
+	with open (DBS_CONFIG_PATH, 'r', encoding='utf-8', errors='ignore') as f:
+		for line in f:
+			match = backupRE.search (line)
+			if match and match.group:
+				progressives_path = convert_filemaker_path (match.group(1))
+				break
+	
+	return progressives_path
+
+#
+#	g e t _ v a a d i n _ v e r s i o n
+#
 
 def get_vaadin_version() -> str:
 	"""
@@ -1726,8 +1756,22 @@ def print_backup_info():
 				print ('Empty or Missing:', location)
 			print ()
 	else:
-		print ('No backup locations defined in FMS Preferences.')
+		print ('No scheduled backup locations defined')
 		print ()
+
+	print ('=== PROGRESSIVE BACKUPS ===\n')
+	progressives_path = get_progressives_path()
+	if progressives_path:
+		print (progressives_path)
+		prog_dirs = get_subfolder_names (progressives_path)
+		for dir in prog_dirs:
+			full_path = os.path.join (progressives_path, dir)
+			size = get_folder_size(full_path)
+			print(f'{size:16,}  {dir}')
+	else:
+		print ('Not defined')
+	print()
+
 
 #
 #	p r i n t _ d o c u m e n t s _ i n f o
