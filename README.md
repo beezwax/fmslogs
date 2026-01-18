@@ -48,9 +48,7 @@ Current functionality with major issues:
 
 ---
 
-## INSTALLATION
-
-### macOS
+## INSTALLATION & REQUIREMENTS
 
 Copy the latest version of the `fmslog` file to a directory in user's command PATH:
 
@@ -79,7 +77,7 @@ options:
   -D, --data                list directories being used for databases, external container data, documents, and temp files
   -e, --edit                open the log in a text editor; first try $EDITOR, then GUI editor (macOS), then nano
   -f, --filter FILTER       only return lines matching regex expression FILTER
-  --go						go (cd) to the directory of the named log
+  --dir LOG					print the directory path of the named log
   -h, --head                display the start of the specified log files instead of its tail
   --help                    display command details
   -H, --headers-off         turn off headers for all logs
@@ -120,6 +118,11 @@ external connections are routed via a reverse proxy through the web server (Apac
 ### -D, --data
 Using values based on the last relevant message in the Event log, display the current database directories being used and their sizes, splitting out any
 optional external container directories.
+
+### --dir
+Print the directory path for the given log name. Could be used in shell command like this:
+`cd "$(fmslog --dir event)"`
+This will change the current directory to the location of the `Event.log` file. The double quotes are needed for macOS because there is a space character in the path.
 
 ### -e, --edit
 Opens a log file in an editor. If the standard shell environment variable $EDITOR is set for the user, the file will be opened using that command.
