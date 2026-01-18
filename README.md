@@ -94,22 +94,23 @@ options:
 
 ---
 
-### -B, --backups
-
-List the paths and their sizes for any backup sets. Target paths are determined by scanning FMS' preferences file.
-
-Disk usage calculations may overstate actual usage, since backup sets can use shared (hard linked) copies of the same data
-if there were no changes between the backup sets and the backups were created with the same backup schedule.
-
-On macOS, it is possible to have multiple target folders that FMS' will still resolve to the same location. Typically this is because
-the boot drive had been renamed at some point.
-
 ### -b, --begin
 Start printing logs on or after the given duration. Durations are an optional number followed by:
 - 's': seconds from now
 - 'm': minutes from now
 - 'h': hours from now
 - 'd': days since midnight today (e.g., '2d' would be from midnight yesterday)
+
+### -B, --backups
+
+List the paths, their sizes, and whether hard links are used for backup sets. Target paths are determined by scanning FMS' preferences file.
+
+Disk usage calculations may overstate actual usage, since backup sets can use shared (hard linked) copies of the same data
+if there were no changes between the backup sets and the backups were created with the same backup schedule. This is typically the case if
+the hard links flag column is 'Yes'. 
+
+On macOS, it is possible to have multiple target folders that FMS' will still resolve to the same location. Typically this is because
+the boot drive had been renamed at some point.
 
 ### -C, --check-connectivity
 Verify connectivity to various server components, and display SSL TLS version and hostnames. Where possible, both internal and external interfaces are checked, since
@@ -145,6 +146,9 @@ Display the start of the specified log files instead of its end (tail).
 Disable the printing of any log column headers the command may use, and don't skip any column headers present in the log files.
 
 Normally, unless tailing a log or printing a log that does not have any fixed columns, the command includes its own column header as the first line for each log.
+
+### -i, --ignore-case
+If using the -f/--filter option, this option will cause any pattern searches to be case insensitive.
 
 ### -l, --list
 List all log names and paths for the current platform. For logs that are present, list their creation and modification timestamps and their size.
