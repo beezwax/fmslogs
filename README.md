@@ -79,6 +79,7 @@ options:
   -D, --data                list directories being used for databases, external container data, documents, and temp files
   -e, --edit                open the log in a text editor; first try $EDITOR, then GUI editor (macOS), then nano
   -f, --filter FILTER       only return lines matching regex expression FILTER
+  --go						go (cd) to the directory of the named log
   -h, --head                display the start of the specified log files instead of its tail
   --help                    display command details
   -H, --headers-off         turn off headers for all logs

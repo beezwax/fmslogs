@@ -26,7 +26,6 @@ POSSIBLE NEW OPTIONS
 	list crash reports
 	remote/external log source via SSH
 	for succinct mode, change 'Information' to 'Info' and 'Warning' to 'Warn' (Error will then be longest)
-	"go directory" function
 
 EXAMPLES OF UNIMPLEMENTED USAGE
 fmslog --ssh simon@server.beezwax.net access  # if using user's default 'SSH key
@@ -1122,23 +1121,33 @@ def get_apache_version() -> str:
 #	g e t _ f o l d e r _ s i z e
 #
 
-def get_folder_size(path='.', exclude_dir=None) -> int:
+def get_folder_stats(path='.', exclude_dir=None) -> tuple:
+	"""
+	Get total size of a directory's contents (eg, du), but
+	also returns the number of files found.
+	"""
 
 	total = 0
+	file_count = 0
+
 	if path:
 		try:
 			for entry in os.scandir(path):
 				if entry.is_file():
 					total += entry.stat().st_size
+					file_count += 1
 				elif entry.is_dir():
 					if entry.name != exclude_dir:
-						total += get_folder_size(entry.path, exclude_dir=exclude_dir)
+						sub_total,sub_count = get_folder_stats (entry.path, exclude_dir=exclude_dir)
+						total += sub_total
+						file_count += sub_count
 		except PermissionError:
 			print ('Error: Permission denied for', path)
 		except FileNotFoundError:
-			return -1
+			return (-1, -1)
 
-	return total
+	return (total,file_count)
+
 
 def get_java_version() -> bool:
 	"""
@@ -1348,9 +1357,11 @@ def get_network_address() -> str:
 
 def get_log_path (log: str) -> str:
 	# TODO: convert Windows paths
-	#print ('basePath:', BASE_PATH)
 	#print ('log_path', LOG_PATHS [log])
-	pathSuffix = LOG_SPECS [log]['path']
+	try:
+		pathSuffix = LOG_SPECS [log]['path']
+	except KeyError:
+		return None
 
 	if pathSuffix[0] == '!':
 		full_path = None
@@ -1442,6 +1453,26 @@ def get_vaadin_version() -> str:
 	
 	return vaadin_str
 
+def print_log_dir (log_name: str):
+	"""
+	Based on the log name provided, print the name of the log directory.
+	This is intended to be use used as a parameter to a shell command,
+	eg: cd `fmslog --dir topcall`.
+	Before returning result we verify that the current user has access.
+	"""
+	log_path = get_log_path (log_name)
+	if log_path:
+		try:
+			log_dir = os.path.dirname (log_path)
+			os.chdir (log_dir)
+			print (log_dir)
+		except PermissionError:
+			print ('Error: current user does not have permission')
+			sys.exit(1)
+		except:
+			print ('Error: could not go to the directory')
+			sys.exit(2)
+
 
 #
 #	h a n d l e _ s e t
@@ -1498,6 +1529,7 @@ def init_parser() -> argparse.ArgumentParser:
 	parser.add_argument('-b', '--begin', nargs=1, help='start at first message on or after time or time interval')
 	parser.add_argument('-C', '--check-connectivity', dest='check_connectivity', action='store_true', help='check connectivity of API endpoints')
 	parser.add_argument('-D', '--databases', action='store_true', help='display database, container, document, and temp directory info')
+	parser.add_argument('--dir', nargs=1, help='print the directory path of the named log')
 	parser.add_argument('-e', '--edit', nargs=1, help='open the log file using the command defined by $EDITOR')
 	parser.add_argument('-f', '--filter', nargs=1, help='only return lines matching regex expression')
 	parser.add_argument('-h', '--head', action='store_true', help='display the first lines of log files')
@@ -1762,11 +1794,11 @@ def print_backup_info():
 			#print ('Base Path:', location)
 			subfolders = get_subfolder_names(location)
 			if subfolders:
-				print ('{:>16}  {}'.format ('SIZE', 'PATH'))
+				print ('{:>12}  {:>16}  {}'.format ('FILES', 'SIZE', 'PATH'))
 				for subfolder in subfolders:
 					full_path = os.path.join(location, subfolder)
-					size = get_folder_size(full_path)
-					print(f'{size:16,}  {full_path}')
+					size,file_count = get_folder_stats(full_path)
+					print(f'{file_count:12,}  {size:16,}  {full_path}')
 			else:
 				print ('Empty or Missing:', location)
 			print ()
@@ -1778,11 +1810,13 @@ def print_backup_info():
 	progressives_path = get_progressives_path()
 	if progressives_path:
 		print (progressives_path)
+		print ()
+		print ('{:>12}  {:>16}  {}'.format ('FILES', 'SIZE', 'PATH'))
 		prog_dirs = get_subfolder_names (progressives_path)
 		for dir in prog_dirs:
 			full_path = os.path.join (progressives_path, dir)
-			size = get_folder_size(full_path)
-			print(f'{size:16,}  {dir}')
+			size,file_count = get_folder_stats(full_path)
+			print(f'{file_count:12,}  {size:16,}  {dir}')
 	else:
 		print ('Not defined')
 	print()
@@ -1798,8 +1832,8 @@ def print_documents_info():
 	"""
 	documents_path = os.path.join (BASE_PATH, 'Data','Documents') 
 	with Spinner ('FMS Documents            '):
-		documents_size = get_folder_size (documents_path)
-	print (f'{documents_size:16,}')
+		documents_size,file_count = get_folder_stats (documents_path)
+	print (f'{file_count:12,}  {documents_size:16,}')
 
 #
 #	p r i n t _ f m t m p _ i n f o
@@ -1809,7 +1843,9 @@ def print_fmtmp_info():
 	"""
 	Display information about FMS' usage of FMTEMP* files in /tmp.
 	"""
+	path_label = '/tmp/FMTMPFM*'
 	tmp_path = '/tmp/FMTEMPFM*'
+
 	path_list = glob.glob (tmp_path)
 	file_count = 0
 	size_sum = 0
@@ -1818,11 +1854,8 @@ def print_fmtmp_info():
 		for file in path_list:
 			stat_info = os.stat(file)
 			size_sum += stat_info.st_size
-		path_label = f'/tmp/FMTMPFM* ({file_count})'
-	else:
-		path_label = '/tmp/FMTMPFM* (0)'
 
-	print (f'{path_label:25} {size_sum:>16,}')
+	print (f'{path_label:24}  {file_count:>12,}  {size_sum:>16,}')
 
 
 def print_error (msg: str):
@@ -1915,47 +1948,48 @@ def print_data_dirs_info():
 	
 	print ()
 	print ('=== DATABASE DIRECTORIES ===')
+	print ('                          {:>12}  {:>16}  {}'.format ('FILES', 'SIZE', 'PATH'))
 
 	# DEFAULT
-	db_size = get_folder_size (default_path, exclude_dir=RCDIR)
-	print (f'Default:                  {db_size:16,}  {default_path}')
+	db_size,file_count = get_folder_stats (default_path, exclude_dir=RCDIR)
+	print (f'Default:                  {file_count:12,}  {db_size:16,}  {default_path}')
 
 	with Spinner ('  ' + RCDIR + ':           '):
 		rc_path = os.path.join (default_path, RCDIR)
-		rc_size = get_folder_size (rc_path)
-	print (f'{rc_size:16,}  {rc_path}')
+		rc_size,rc_count = get_folder_stats (rc_path)
+	print (f'{rc_count:12,}  {rc_size:16,}  {rc_path}')
 
 	# SECURE
-	size = get_folder_size (secure_path)
-	print (f'Secure:                   {size:16,}  {secure_path}')
+	size,file_count = get_folder_stats (secure_path)
+	print (f'Secure:                   {file_count:12,}  {size:16,}  {secure_path}')
 
 	with Spinner ('  ' + RCDIR + ':           '):
 		rc_path = os.path.join (secure_path, RCDIR)
-		rc_size = get_folder_size (rc_path)
+		rc_size,rc_count = get_folder_stats (rc_path)
 	if rc_size >= 0:
-		print (f'{rc_size:16,}  {rc_path}')
+		print (f'{file_count:12,}  {rc_size:16,}  {rc_path}')
 	else:
-		print ('{:>16}  {}'.format ('-', '-'))
+		print ('{:>12}  {:>16}  {}'.format ('-', '-', '-'))
 
 	# ADDITIONAL 1
 	if additional_path1:
-		size = get_folder_size (additional_path1, RCDIR)
-		print (f'Additional Databases #1:  {size:16,}  {additional_path1}')
+		size,file_count = get_folder_stats (additional_path1, RCDIR)
+		print (f'Additional Databases #1:  {file_count:12,}  {size:16,}  {additional_path1}')
 
 		with Spinner ('  ' + RCDIR + ':           '):
 			rc_path = os.path.join (additional_path1, RCDIR)
-			rc_size = get_folder_size (rc_path)
+			rc_size,rc_count = get_folder_stats (rc_path)
 		if rc_size >= 0:
-			print (f'{rc_size:16,}  {rc_path}')
+			print (f'{file_count:12,}  {rc_size:16,}  {rc_path}')
 		else:
-			print ('{:>16}  {}'.format ('-', '-'))
+			print ('{:>12}  {:>16}  {}'.format ('-', '-', '-'))
 
 		with Spinner ('  External Container #1: '):
-			rc_size = get_folder_size (remote_container_path1)
+			rc_size,rc_count = get_folder_stats (remote_container_path1)
 		if True: # rc_size >= 0:
-			print (f'{rc_size:16,}  {remote_container_path1}')
+			print (f'{file_count:12,}  {rc_size:16,}  {remote_container_path1}')
 		else:
-			print ('{:>16}  {}'.format ('-', '-'))
+			print ('{:>12}  {:>16}  {}'.format ('-', '-', '-'))
 
 	# ADDITIONAL 2
 	if additional_path2:
@@ -1964,15 +1998,15 @@ def print_data_dirs_info():
 
 		with Spinner ('  ' + RCDIR + ':           '):
 			rc_path = os.path.join (additional_path2, RCDIR)
-			rc_size = get_folder_size (rc_path)
+			rc_size,rc_count = get_folder_stats (rc_path)
 		if rc_size >= 0:
-			print (f'{rc_size:16,}  {rc_path}')
+			print (f'{file_count:12,}  {rc_size:16,}  {rc_path}')
 		else:
-			print ('{:16}  {}'.format ('-', '-'))
+			print ('{:12}  {:16}  {}'.format ('-', '-', '-'))
 
 		with Spinner ('  External Container #2: '):
-			rc_size = get_folder_size (remote_container_path2)
-		print (f'{rc_size:16,}  {remote_container_path2}')
+			rc_size,rc_count = get_folder_stats (remote_container_path2)
+		print (f'{file_count:12,}  {rc_size:16,}  {remote_container_path2}')
 
 	print ()
 	print ('=== OTHER DATA DIRECTORIES & FILES ===')
@@ -2709,6 +2743,10 @@ def handle_named_options (args) -> bool:
 
 	if args.databases:
 		print_data_dirs_info()
+		ignore_positionals = True
+
+	if args.dir:
+		print_log_dir (args.dir[0])
 		ignore_positionals = True
 
 	if args.list:
