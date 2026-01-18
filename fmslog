@@ -19,7 +19,7 @@ from contextlib import ExitStack
 """
 POSSIBLE NEW OPTIONS
 	non-standard install location
-	'top' or iostat option
+	'top' or iostat like option
 	summarize results where possible (eg, count, min, max, sum)?
 	convert table IDs
 	paged output
@@ -28,13 +28,12 @@ POSSIBLE NEW OPTIONS
 	for succinct mode, change 'Information' to 'Info' and 'Warning' to 'Warn' (Error will then be longest)
 
 EXAMPLES OF UNIMPLEMENTED USAGE
-fmslog --ssh simon@server.beezwax.net access  # if using user's default 'SSH key
-fmslog -s enable topcall  # enable TopCall.log
+	fmslog --ssh simon@server.beezwax.net topcall  # if using user's default 'SSH key
 
 Reset repo:  git fetch origin main; git reset --hard origin/main
 """
 
-VERSION = "0.35 - 2026-01-16"
+VERSION = "0.36 - 2026-01-18"
 
 TIMESTAMP_START = None
 FILTER_REGEX = None
