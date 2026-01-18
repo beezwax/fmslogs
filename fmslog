@@ -38,6 +38,8 @@ VERSION = "0.35 - 2026-01-16"
 
 TIMESTAMP_START = None
 FILTER_REGEX = None
+FILTER_IGNORE_CASE = False
+
 PASSWORD = None
 TEXTWRAP = textwrap.TextWrapper(width=120,tabsize=10)
 USER = None
@@ -829,7 +831,10 @@ def compile_filter(regex: str) -> bool:
 	is_valid = False
 	
 	try:
-		FILTER_REGEX = re.compile(regex)
+		if FILTER_IGNORE_CASE:
+			FILTER_REGEX = re.compile(regex, re.I)
+		else:
+			FILTER_REGEX = re.compile(regex)
 		is_valid = True
 	except re.error as e:       # aliased to PatternError as of 3.13
 		print(f"Error: bad regex expression: {e}\n")
@@ -1535,6 +1540,7 @@ def init_parser() -> argparse.ArgumentParser:
 	parser.add_argument('-h', '--head', action='store_true', help='display the first lines of log files')
 	parser.add_argument('-H', '--headers-off', dest='headers_off', action='store_true', help='turn off headers for all logs')
 	parser.add_argument('--help', action='help', help='display command details')
+	parser.add_argument('-i', '--ignore-case', action='store_true', help='ignore case with filter')
 	parser.add_argument('-L', '--list', action='store_true', help='list all log files, including size, date created & modified, sorted by modification time')
 	parser.add_argument('-m', '--merge', action='store_true', help='combine output of two or more logs based on the message timestamps')
 	parser.add_argument('-n', '--number', nargs=1, default=['1s'], help='range or number of lines to print')
@@ -2440,18 +2446,18 @@ def read_tail_filtered (file_path: str, lines_from_end: int) -> list:
 	"""
 	
 	check_file_validity (file_path)
-	
-	matching = []
+	lines = []
 	line_num = 1
+
 	while True:
 		line = linecache.getline (file_path, line_num)
 		if line == '': break
 		if FILTER_REGEX.search (line):
-			matching.append (line_num)
-		
+			lines.append (line_num)
+
 		line_num += 1
-		
-	return matching [-lines_from_end:]
+
+	return lines [-lines_from_end:]
 
 
 #
@@ -2726,7 +2732,7 @@ def handle_named_options (args) -> bool:
 	positional parameters should be skipped.
 	"""
 
-	global PASSWORD, TIMESTAMP_START, USER	
+	global FILTER_IGNORE_CASE, PASSWORD, TIMESTAMP_START, USER	
 	ignore_positionals = False
 
 	if args.backups:
@@ -2748,6 +2754,9 @@ def handle_named_options (args) -> bool:
 	if args.dir:
 		print_log_dir (args.dir[0])
 		ignore_positionals = True
+
+	if args.ignore_case:
+		FILTER_IGNORE_CASE = True
 
 	if args.list:
 		print_log_info()
