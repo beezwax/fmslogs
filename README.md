@@ -62,7 +62,7 @@ Requires Python 3.9 or newer.
 ## OPTIONS & PARAMETERS
 
 ```
-usage: fmslog [-b BEGIN] [-e EDIT] [-f FILTER] [-h] [-H] [--help] [-l] [-L] [-m] [-n NUMBER] [-p PASSWORD] [-S SET] [-s] [--ssh SSH] [-t] [--tail TAIL] [--truncate] [-u USER] [-N] [-v] [logs ...]
+usage: fmslog [-b BEGIN] [-e EDIT] [-f FILTER] [-h] [-H] [-i] [-l] [-L] [-m] [-n NUMBER] [-p PASSWORD] [-S SET] [-s] [--ssh SSH] [-t] [--tail TAIL] [--truncate] [-u USER] [-N] [-v] [logs ...]
               [logname]
                
 View FileMaker Server logs and set logging options
@@ -71,7 +71,7 @@ positional arguments (log name):
   {access,admin,clientstats,dapi,event,fac,fmodatadebug,fmsadmindebug,fmsasedebug,fmscwpc,fmscwpcli,fmsdebug,fmsgetpasskeyebug,fmshdebug,fmshelper,fmslogdebug,fmwipd,httpaccess,httpdctlerr,httpdctlout,httperror,httpsslaccess,httpsslerror,install,httpaccess,loadschedules,odata,scriptevent,stats,stderr,stdout,topcall,trimlog,wpe,wpedebug,interval,clientstats,fmsdebug,logsize,topcall}
 
 options:
-  -B, --backups             list scheduled backup sets present
+  -B, --backups             list scheduled backup sets present, including total number of files and size
   -b, --begin BEGIN         start at first message on or after time or time interval in BEGIN
   -C, --check-connectivity	test connectivity to FMS components
   -D, --data                list directories being used for databases, external container data, documents, and temp files
@@ -81,10 +81,11 @@ options:
   -h, --head                display the start of the specified log files instead of its tail
   --help                    display command details
   -H, --headers-off         turn off headers for all logs
+  -i, --ignore-case			make filter's regex case insensitive
   -l, --list                list all log files, including size, date created & modified, sorted by modification time
   -n, --number RANGE        quantity of lines to print
   -N, --network             network usage info
-  -p, --process-info		metrics for FMS processes
+  -P, --process-info		metrics for FMS processes
   -S, --set SET             change log configuration options
   -s, --succinct            strip less useful details from log output (partially implemented)
   -t, --tail                wait for any new messages after printing current end of log
@@ -160,7 +161,7 @@ you may want to use the --truncate option to have an exact fit.
 ### -N, --network
 List ports in use by FileMaker's processes.
 
-### -p, --process-info
+### -P, --process-info
 Display metrics for all processes running under the fmserver user. Metrics include process ID, CPU & memory usage, and process start time.
 
 ### -s, --succinct

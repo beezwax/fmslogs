@@ -1550,8 +1550,8 @@ def init_parser() -> argparse.ArgumentParser:
 	parser.add_argument('-m', '--merge', action='store_true', help='combine output of two or more logs based on the message timestamps')
 	parser.add_argument('-n', '--number', nargs=1, default=['1s'], help='range or number of lines to print')
 	parser.add_argument('-N', '--network', action='store_true', help='list connections and their status') # TODO: throwing "expected log name" error
-	parser.add_argument('-p', '--process-info', action='store_true', dest='process_info', help='list FMS related processes and their stats')
-	parser.add_argument('-P', '--password', help='FMS console')
+	parser.add_argument('-P', '--process-info', action='store_true', dest='process_info', help='list FMS related processes and their stats')
+	parser.add_argument('-p', '--password', help='for FMS console access')
 	parser.add_argument('-S', '--set', nargs=2, help='change log configuration option')
 	parser.add_argument('-s', '--succinct', action='store_true', help='strip less useful details from log output')
 	#parser.add_argument('--ssh', nargs=1, help='use the connection string to fetch logs from remote server')
