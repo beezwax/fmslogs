@@ -104,11 +104,11 @@ Start printing logs on or after the given duration. Durations are an optional nu
 
 ### -B, --backups
 
-List the paths, their sizes, and whether hard links are used for backup sets. Target paths are determined by scanning FMS' preferences file.
+List the paths, their sizes, and total size of hard linked files in backup sets. Target paths are determined by scanning FMS' preferences file.
 
-Disk usage calculations may overstate actual usage, since backup sets can use shared (hard linked) copies of the same data
-if there were no changes between the backup sets and the backups were created with the same backup schedule. This is typically the case if
-the hard links flag column is 'Yes'. 
+Typical disk usage calculations may overstate actual usage, since backup sets can use shared (hard linked) copies of the same data
+if there were no changes between the backup sets and the backups were created with the same backup schedule. By subtracting the size of the hard
+linked files from the total size you can get the total size of unique files in each backup.
 
 On macOS, it is possible to have multiple target folders that FMS' will still resolve to the same location. Typically this is because
 the boot drive had been renamed at some point.
@@ -120,6 +120,8 @@ external connections are routed via a reverse proxy through the web server (Apac
 ### -D, --data
 Using values based on the last relevant message in the Event log, display the current database directories being used and their sizes, splitting out any
 optional external container directories.
+
+For the total size values with Default and Secure folders does not include the enclosed RC_Data_FMS folders, which are totaled separately.
 
 ### --dir
 Print the directory path for the given log name. Could be used in shell command like this:

@@ -1130,12 +1130,12 @@ def get_folder_stats (path='.', exclude_dir=None) -> tuple:
 	For the given directory path, recursively travel all its contents to get:
 	- total size of all files (eg, du)
 	- the number of files found
-	- if any hard links were found.
+	- size of of all files using hard links
 	"""
 
 	total = 0
 	file_count = 0
-	has_hard_links = False
+	hard_linked = 0
 
 	if path:
 		try:
@@ -1143,19 +1143,21 @@ def get_folder_stats (path='.', exclude_dir=None) -> tuple:
 				if entry.is_file():
 					total += entry.stat().st_size
 					file_count += 1
-					has_hard_links = (os.stat(entry).st_nlink > 1) or has_hard_links
+					if (os.stat(entry).st_nlink > 1):
+						hard_linked += entry.stat().st_size
 				elif entry.is_dir():
 					if entry.name != exclude_dir:
-						sub_total,sub_count,sub_has_links = get_folder_stats (entry.path, exclude_dir=exclude_dir)
+						sub_total,sub_count,sub_linked = get_folder_stats (entry.path, exclude_dir=exclude_dir)
 						total += sub_total
 						file_count += sub_count
-						has_hard_links = has_hard_links or sub_has_links
+						hard_linked += sub_linked
 		except PermissionError:
 			print ('Error: Permission denied for', path)
 		except FileNotFoundError:
-			return (-1, -1, None)
+			# Will get this if target is empty.
+			return (0, 0, 0)
 
-	return (total,file_count,has_hard_links)
+	return (total,file_count,hard_linked)
 
 
 def get_java_version() -> bool:
@@ -1649,7 +1651,10 @@ def mac_log_tail (minutes_back: str):
 	"""
 	Return recent lines from the macOS system log for the given duration.
 	"""
-	return subprocess.run(['log', 'show', '--style', 'json', '--last', minutes_back + 'm', '--info', '--predicate' 'process=="fmserverd"'], capture_output=True, text=True).stdout.split('\n')
+	return subprocess.run(
+		['log', 'show', '--style', 'json', '--last', minutes_back + 'm', '--info', '--predicate' 'process=="fmserverd"'],
+		capture_output=True,
+		text=True).stdout.split('\n')
 
 
 #
@@ -1804,12 +1809,11 @@ def print_backup_info():
 			#print ('Base Path:', location)
 			subfolders = get_subfolder_names(location)
 			if subfolders:
-				print ('{:>12}  {:>10}  {:>16}  {}'.format ('FILES', 'HARD LINKS', 'SIZE', 'PATH'))
+				print ('{:>11}  {:>16}  {:>16}  {}'.format ('FILES', 'SIZE', 'H/L SIZE', 'PATH'))
 				for subfolder in subfolders:
 					full_path = os.path.join(location, subfolder)
-					size,file_count,has_hard_links = get_folder_stats(full_path)
-					hard_links_yn = "Yes" if has_hard_links else "No"
-					print(f'{file_count:12,}  {hard_links_yn:>10}  {size:16,}  {full_path}')
+					size,file_count,hl_size = get_folder_stats(full_path)
+					print(f'{file_count:11,}  {size:16,}  {hl_size:16,}  {full_path}')
 			else:
 				print ('Empty or Missing:', location)
 			print ()
@@ -1822,13 +1826,12 @@ def print_backup_info():
 	if progressives_path:
 		print (progressives_path)
 		print ()
-		print ('{:>12}  {:>10} {:>16}  {}'.format ('FILES', 'HARD LINKS', 'SIZE', 'PATH'))
+		print ('{:>11}  {:>16}  {:>16}  {}'.format ('FILES', 'SIZE', 'H/L SIZE', 'PATH'))
 		prog_dirs = get_subfolder_names (progressives_path)
 		for dir in prog_dirs:
 			full_path = os.path.join (progressives_path, dir)
-			size,file_count,has_hard_links = get_folder_stats(full_path)
-			hard_links_yn = "Yes" if has_hard_links else "No"
-			print(f'{file_count:12,}  {hard_links_yn:>10}  {size:16,}  {dir}')
+			size,file_count,hl_size = get_folder_stats(full_path)
+			print(f'{file_count:11,}  {size:>16,}  {hl_size:>16,}  {dir}')
 	else:
 		print ('Not defined')
 	print()
@@ -1848,74 +1851,66 @@ def print_data_dirs_info():
 	
 	print ()
 	print ('=== DATABASE DIRECTORIES ===')
-	print ('                          {:>12}  {:>10}  {:>16}  {}'.format ('FILES', 'HARD LINKS', 'SIZE', 'PATH'))
+	print ('                          {:>11}  {:>16}  {:>16}  {}'.format ('FILES', 'SIZE', 'H/L SIZE', 'PATH'))
 
 	# DEFAULT
-	db_size,file_count,has_hard_links = get_folder_stats (default_path, exclude_dir=RCDIR)
-	hard_links_yn = "Yes" if has_hard_links else "No"
-	print (f'Default:                  {file_count:12,}  {hard_links_yn:>10}  {db_size:16,}  {default_path}')
+	db_size,file_count,hl_size = get_folder_stats (default_path, exclude_dir=RCDIR)
+	print (f'Default:                  {file_count:11,}  {db_size:16,}  {hl_size:16,}  {default_path}')
 
 	with Spinner ('  ' + RCDIR + ':           '):
 		rc_path = os.path.join (default_path, RCDIR)
-		rc_size,rc_count,has_hard_links = get_folder_stats (rc_path)
-	hard_links_yn = "Yes" if has_hard_links else "No"
-	print (f'{rc_count:12,}  {hard_links_yn:>10}  {rc_size:16,}  {rc_path}')
+		rc_size,file_count,hl_size = get_folder_stats (rc_path)
+	print (f'{file_count:11,}  {rc_size:16,}  {hl_size:>16}  {rc_path}')
 
 	# SECURE
-	size,file_count,has_hard_links = get_folder_stats (secure_path)
-	hard_links_yn = "Yes" if has_hard_links else "No"
-	print (f'Secure:                   {file_count:12,}  {hard_links_yn:>10}  {size:16,}  {secure_path}')
+	size,file_count,hl_size = get_folder_stats (secure_path, exclude_dir=RCDIR)
+	print (f'Secure:                   {file_count:11,}  {size:16,}  {hl_size:16,}  {secure_path}')
 
 	with Spinner ('  ' + RCDIR + ':           '):
 		rc_path = os.path.join (secure_path, RCDIR)
-		rc_size,rc_count,has_hard_links = get_folder_stats (rc_path)
+		rc_size,file_count,hl_size = get_folder_stats (rc_path)
 	if rc_size >= 0:
-		hard_links_yn = "Yes" if has_hard_links else "No"
-		print (f'{file_count:12,}  {hard_links_yn:>10}  {rc_size:16,}  {rc_path}')
+		print (f'{file_count:11,}  {rc_size:16,}  {hl_size:>16,}  {rc_path}')
 	else:
-		print ('{:>12}  {:>10}  {:>16}  {}'.format ('-', '-', '-', '-'))
+		print ('{:>11}  {:>16}  {:>16}  {}'.format ('-', '-', '-', '-'))
 
 	# ADDITIONAL 1
 	if additional_path1:
-		size,file_count,has_hard_links = get_folder_stats (additional_path1, RCDIR)
-		hard_links_yn = "Yes" if has_hard_links else "No"
-		print (f'Additional Databases #1:  {file_count:12,}  {hard_links_yn:>10}  {size:16,}  {additional_path1}')
+		size,file_count,hl_size = get_folder_stats (additional_path1, RCDIR)
+		print (f'Additional Databases #1:  {file_count:11,}  {size:16,}  {hl_size:16,}  {additional_path1}')
 
 		with Spinner ('  ' + RCDIR + ':           '):
 			rc_path = os.path.join (additional_path1, RCDIR)
-			rc_size,rc_count,has_hard_links = get_folder_stats (rc_path)
+			rc_size,file_count,hl_size = get_folder_stats (rc_path)
 		if rc_size >= 0:
-			hard_links_yn = "Yes" if has_hard_links else "No"
-			print (f'{file_count:12,}  {hard_links_yn:>10}  {rc_size:16,}  {rc_path}')
+			print (f'{file_count:11,}  {rc_size:16,}  {hl_size:>16,}  {rc_path}')
 		else:
-			print ('{:>12}  {:>10}  {:>16}  {}'.format ('-', '-', '-', '-'))
+			print ('{:>11}  {:>16}  {:>16}  {}'.format ('-', '-', '-', '-'))
 
 		with Spinner ('  External Container #1: '):
-			rc_size,rc_count,has_hard_links = get_folder_stats (remote_container_path1)
+			rc_size,file_count,hl_size = get_folder_stats (remote_container_path1)
 		if True: # rc_size >= 0:
-			print (f'{file_count:12,}  {hard_links_yn:>10}  {rc_size:16,}  {remote_container_path1}')
+			print (f'{file_count:11,}  {rc_size:16,}  {hl_size:>16,}  {remote_container_path1}')
 		else:
-			print ('{:>12}  {:>10}  {:>16}  {}'.format ('-', '-', '-', '-'))
+			print ('{:>11}  {:>16}  {:>16}  {}'.format ('-', '-', '-', '-'))
 
 	# ADDITIONAL 2
 	if additional_path2:
-		size,file_count,has_hard_links = get_folder_size (additional_path2, RCDIR)
-		hard_links_yn = "Yes" if has_hard_links else "No"
-		print (f'Additional Databases #2:  {file_count:12,}  {hard_links_yn:>10}  {size:16,}  {additional_path2}')
+		size,file_count,hl_size = get_folder_stats (additional_path2, RCDIR)
+		print (f'Additional Databases #2:  {file_count:11,}  {size:16,}  {hl_size:16,}  {additional_path2}')
 
 		with Spinner ('  ' + RCDIR + ':           '):
 			rc_path = os.path.join (additional_path2, RCDIR)
-			rc_size,rc_count,has_hard_links = get_folder_stats (rc_path)
+			rc_size,file_count,hl_size = get_folder_stats (rc_path)
 		if rc_size >= 0:
-			hard_links_yn = "Yes" if has_hard_links else "No"
-			print (f'{file_count:12,}  {hard_links_yn:>10}  {rc_size:16,}  {rc_path}')
+			hard_links_yn = "Yes" if hl_size else "No"
+			print (f'{file_count:12,}  {rc_size:16,}  {hl_size:>16,}  {rc_path}')
 		else:
-			print ('{:12}  {:>10}  {:16}  {}'.format ('-', '-', '-'))
+			print ('{:11}  {:>16}  {:>16}  {}'.format ('-', '-', '-'))
 
 		with Spinner ('  External Container #2: '):
-			rc_size,rc_count,has_hard_links = get_folder_stats (remote_container_path2)
-		hard_links_yn = "Yes" if has_hard_links else "No"
-		print (f'{file_count:12,}  {hard_links_yn:>10}  {rc_size:16,}  {remote_container_path2}')
+			rc_size,file_count,hl_size = get_folder_stats (remote_container_path2)
+		print (f'{file_count:11,}  {rc_size:16,}  {hl_size:16,}  {remote_container_path2}')
 
 	print ()
 	print ('=== OTHER DATA DIRECTORIES & FILES ===')
@@ -1935,9 +1930,9 @@ def print_documents_info():
 	"""
 	documents_path = os.path.join (BASE_PATH, 'Data','Documents') 
 	with Spinner ('FMS Documents            '):
-		documents_size,file_count,has_hard_links = get_folder_stats (documents_path)
+		documents_size,file_count,hl_size = get_folder_stats (documents_path)
 	# Any point in displaying if has hard links?
-	print (f'{file_count:12,}              {documents_size:16,}')
+	print (f'{file_count:11,}  {documents_size:16,}')
 
 #
 #	p r i n t _ f m t m p _ i n f o
@@ -1959,7 +1954,7 @@ def print_fmtmp_info():
 			stat_info = os.stat(file)
 			size_sum += stat_info.st_size
 
-	print (f'{path_label:24}  {file_count:>12,}              {size_sum:>16,}')
+	print (f'{path_label:24}  {file_count:>11,}  {size_sum:>16,}')
 
 
 def print_error (msg: str):
