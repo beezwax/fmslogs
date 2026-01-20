@@ -7,10 +7,19 @@ Author: Simon Brown on 10/15/2025
 Purpose: Display FileMaker Server logs, change logging options, and get resource usage.
 """
 
-import argparse, curses, datetime
-import glob, http.client, itertools
-import linecache, mmap, os, pathlib
-import platform, pprint, re, shutil
+import argparse
+import curses
+import datetime
+import glob
+import http.client
+import itertools
+import linecache
+import mmap
+import os
+import pathlib
+import platform
+import pprint
+import pwd, re, shutil, signal
 import socket, subprocess, socket, sys
 import tempfile, textwrap, threading, time, ssl, urllib.request
 from enum import Enum
@@ -20,12 +29,13 @@ from contextlib import ExitStack
 POSSIBLE NEW OPTIONS
 	non-standard install location
 	'top' or iostat like option
+	scan all logs for recent errors, exceptions, etc.
 	summarize results where possible (eg, count, min, max, sum)?
 	convert table IDs
 	paged output
-	list crash reports
 	remote/external log source via SSH
 	for succinct mode, change 'Information' to 'Info' and 'Warning' to 'Warn' (Error will then be longest)
+	stop/start/restart FMS service
 
 EXAMPLES OF UNIMPLEMENTED USAGE
 	fmslog --ssh simon@server.beezwax.net topcall  # if using user's default 'SSH key
@@ -33,7 +43,7 @@ EXAMPLES OF UNIMPLEMENTED USAGE
 Reset repo:  git fetch origin main; git reset --hard origin/main
 """
 
-VERSION = "0.36 - 2026-01-18"
+VERSION = "0.37 - 2026-01-19"
 
 TIMESTAMP_START = None
 FILTER_REGEX = None
@@ -78,6 +88,12 @@ FMS_BIN_SUFFIX = {
 
 # This may get overridden by user option,
 BASE_PATH = DEF_BASE_PATHS [platform.system()]
+
+CRASH_PATHS = {
+	'Darwin': '/Library/Logs/DiagnosticReports',
+	'Linux': '/var/crash',
+	'Windows': 'C:/Programs/FileMaker/FileMaker Server/Database Server'
+}
 
 FMS_BIN_PATH = BASE_PATH + FMS_BIN_SUFFIX [platform.system()]
 
@@ -775,6 +791,7 @@ def claris_config_remove(target_dir: str) -> bool:
 	print ()
 	return True
 
+
 #
 #	c l a r i s _ c o n f i g _ w r i t e
 #
@@ -1396,7 +1413,39 @@ def get_file_timestamps (path: str) -> tuple:
 	"""Return a file's creation and modification timestamps"""
 	return (os.path.getmtime(path), pathlib.Path(path).stat().st_mtime)
 
-	
+#
+#	g e t _ f m s _ p i d
+#
+
+def get_fms_pid() -> int:
+	"""
+	Return the process ID of the fmserverd process, or None if not running.
+	There will only be one such process on a given system.
+	"""
+	fms_pid = None
+
+	try:
+		# Use pgrep to find fmserverd process ID
+		result = subprocess.run(
+			['pgrep', 'fmserverd'],
+			capture_output=True,
+			text=True,
+			check=True
+		)
+		
+		# Parse the PID from pgrep output
+		try:
+			fms_pid = int(result.stdout.split('\n')[0])
+		except ValueError:
+			fms_pid = None
+		
+	except subprocess.CalledProcessError:
+		# pgrep returns 1 when no processes match
+		return None
+
+	return fms_pid
+
+
 def get_fms_version() -> str:
 	"""
 	Fetch the version of FileMaker Server currently installed.
@@ -1463,26 +1512,6 @@ def get_vaadin_version() -> str:
 		vaadin_str = '<missing>'
 	
 	return vaadin_str
-
-def print_log_dir (log_name: str):
-	"""
-	Based on the log name provided, print the name of the log directory.
-	This is intended to be use used as a parameter to a shell command,
-	eg: cd `fmslog --dir topcall`.
-	Before returning result we verify that the current user has access.
-	"""
-	log_path = get_log_path (log_name)
-	if log_path:
-		try:
-			log_dir = os.path.dirname (log_path)
-			os.chdir (log_dir)
-			print (log_dir)
-		except PermissionError:
-			print ('Error: current user does not have permission')
-			sys.exit(1)
-		except:
-			print ('Error: could not go to the directory')
-			sys.exit(2)
 
 
 #
@@ -1556,6 +1585,9 @@ def init_parser() -> argparse.ArgumentParser:
 	parser.add_argument('-S', '--set', nargs=2, help='change log configuration option')
 	parser.add_argument('-s', '--succinct', action='store_true', help='strip less useful details from log output')
 	#parser.add_argument('--ssh', nargs=1, help='use the connection string to fetch logs from remote server')
+	parser.add_argument('--restart-fms', action='store_true', help='restart the FileMaker Server service')
+	parser.add_argument('--start-fms', action='store_true', help='start the FileMaker Server service')
+	parser.add_argument('--stop-fms', action='store_true', help='stop the FileMaker Server service')
 	parser.add_argument('-t', dest='tail', action='store_true', help='wait for any new messages')
 	parser.add_argument('--tail', dest='tail', type=float, nargs=1, default=[-1.0], help='wait for any new messages, specifying number of seconds to wait for each file')
 	parser.add_argument('--truncate', action='store_true', help='cut off any output if beyond width of screen')
@@ -1655,6 +1687,81 @@ def mac_log_tail (minutes_back: str):
 		['log', 'show', '--style', 'json', '--last', minutes_back + 'm', '--info', '--predicate' 'process=="fmserverd"'],
 		capture_output=True,
 		text=True).stdout.split('\n')
+
+#
+#	m a n a g e _ f m s _ s e r v i c e
+#
+
+def manage_fms_service (action: str) -> bool:
+	"""
+	Start, stop, or restart the FileMaker Server service.
+	Returns true if the operation succeeded.
+	"""
+	curr_platform = platform.system()
+	got_sudo_prompt = False
+	macos_actions = {
+		'start': 'load',
+		'stop': 'unload',
+		'restart': 'kickstart'	# requires -k option
+	}
+
+	if curr_platform in ['Darwin', 'Linux']:
+
+		fms_pid = get_fms_pid()
+
+		if os.getuid() != 0:
+			print ('Running commands with sudo, you may be prompted for password.')
+			subprocess.run(
+				['sudo', '-v'],
+				capture_output=False,
+				text=True,
+				check=False)
+			
+		if action == 'stop':
+			if fms_pid:
+				print ('Ensuring that databases are closed cleanly before stopping FMS...', end='', flush=True)
+				if send_signal_to_process (fms_pid):	# send USR1 to close files
+					print ('done')
+				else:
+					print ('failed')
+				print (f'{action.capitalize()}ing FMS service...',end='', flush=True)
+
+			else:
+				print ('The fmserverd process is not currently running')
+				print ('Proceeding to stop the service...',end='', flush=True)
+
+		# For the remainder, handle any of the 3 actions the same based on OS
+		if curr_platform == 'Darwin':
+			lc_action = macos_actions[action]
+			
+			if action == 'start':
+				if fms_pid:
+					print ('FMS service is already running.')
+					return True
+				print ('Starting FMS service...', end='', flush=True)
+			service_proc = subprocess.run(
+				['sudo', 'launchctl', lc_action, '/Library/LaunchDaemons/com.filemaker.fms.plist'],
+				capture_output=True,
+				text=True,
+				check=False)
+			print ('done.')
+
+		elif curr_platform == 'Linux':
+			if not got_sudo_prompt and os.getuid() != 0:
+				print ('Running systemctl with sudo, you may be prompted for password.')
+			service_proc = subprocess.run(
+				['sudo', 'systemctl', action, 'fms.service'],
+				capture_output=True,
+				text=True,
+				check=False)
+			print ('done.')
+	
+	else:
+		# Windows not yet implemented
+		return False
+
+	print (service_proc.stderr)
+	return service_proc.returncode == 0
 
 
 #
@@ -1799,6 +1906,7 @@ def print_backup_info():
 	"""
 	Print backup schedule information from FMS Preferences.
 	"""
+	# TODO: break out size of Removed_by_FMS folder
 	
 	print ()
 	print ('=== BACKUP SETS ===\n')
@@ -1815,7 +1923,7 @@ def print_backup_info():
 					size,file_count,hl_size = get_folder_stats(full_path)
 					print(f'{file_count:11,}  {size:16,}  {hl_size:16,}  {full_path}')
 			else:
-				print ('Empty or Missing:', location)
+				print_error ('Empty or Missing:', location)
 			print ()
 	else:
 		print ('No scheduled backup locations defined')
@@ -1835,6 +1943,61 @@ def print_backup_info():
 	else:
 		print ('Not defined')
 	print()
+
+
+def print_crash_reports() -> str:
+	"""
+	Print info on any crash report logs belonging to FMS.
+	"""
+	curr_platform = platform.system()
+	log_paths = CRASH_PATHS [curr_platform]
+	
+	if curr_platform not in ['Darwin', 'Linux']:
+		print(f"Crash log listing not supported on {curr_platform}")
+		return
+	
+	# Get fmserver user UID
+	try:
+		fmserver_uid = pwd.getpwnam('fmserver').pw_uid
+	except KeyError:
+		print("Warning: fmserver user not found on this system")
+		return
+	
+	# Check if log path exists
+	if not os.path.exists(log_paths):
+		print(f"Crash log directory not found: {log_paths}")
+		return
+	
+	print('=== CRASH LOGS (fmserver user) ===')
+	print(f'Directory: {log_paths}')
+	print()
+	
+	# List files owned by fmserver user
+	fmserver_files = []
+	try:
+		for entry in os.scandir(log_paths):
+			if entry.is_file():
+				stat_info = entry.stat()
+				if stat_info.st_uid == fmserver_uid:
+					# Get file modification time
+					mtime = datetime.datetime.fromtimestamp(stat_info.st_mtime)
+					fmserver_files.append((entry.name, stat_info.st_size, mtime))
+	except PermissionError:
+		print(f"Permission denied, run with sudo or as root")
+		return
+	
+	if fmserver_files:
+		# Sort by modification time (most recent first)
+		fmserver_files.sort(key=lambda x: x[2], reverse=True)
+		
+		print(f"{'FILE':50}  {'SIZE':>16}  {'MODIFIED':20}")
+		print('-' * 95)
+		# Getting creation timestamp would be preferred, but problematic on Linux.
+		for filename, size, mtime in fmserver_files:
+			print(f'{filename:50}  {size:16,}  {mtime.strftime("%Y-%m-%d %H:%M:%S")}')
+		print()
+	else:
+		print("No crash logs found for fmserver user")
 
 
 #
@@ -1938,6 +2101,16 @@ def print_documents_info():
 #	p r i n t _ f m t m p _ i n f o
 #
 
+def print_error (msg: str):
+	"""
+	Print an error string with emphasis.
+	"""
+	print (TerminalColors.RED + TerminalColors.BOLD + msg + TerminalColors.END)
+
+#
+#	p r i n t _ f m t m p _ i n f o
+#
+
 def print_fmtmp_info():
 	"""
 	Display information about FMS' usage of FMTEMP* files in /tmp.
@@ -1957,14 +2130,10 @@ def print_fmtmp_info():
 	print (f'{path_label:24}  {file_count:>11,}  {size_sum:>16,}')
 
 
-def print_error (msg: str):
-	"""
-	Print an error string with emphasis.
-	"""
-	print (TerminalColors.RED + TerminalColors.BOLD + msg + TerminalColors.END)
-
-
 def print_log (log_name: str, count: int):
+	"""
+	Top-level function to call the appropriate log printing function.
+	"""
 
 	lines_printed = -1
 	print (OUTPUT_MODE)
@@ -1980,6 +2149,27 @@ def print_log (log_name: str, count: int):
 	return lines_printed
 
 
+def print_log_dir (log_name: str):
+	"""
+	Based on the log name provided, print the name of the log directory.
+	This is intended to be use used as a parameter to a shell command,
+	eg: cd `fmslog --dir topcall`.
+	Before returning result we verify that the current user has access.
+	"""
+	log_path = get_log_path (log_name)
+	if log_path:
+		try:
+			log_dir = os.path.dirname (log_path)
+			os.chdir (log_dir)
+			print (log_dir)
+		except PermissionError:
+			print ('Error: current user does not have permission')
+			sys.exit(1)
+		except:
+			print ('Error: could not go to the directory')
+			sys.exit(2)
+
+
 #
 #	p r i n t _ l o g _ i n f o
 #
@@ -1992,7 +2182,7 @@ def print_log_info():
 
 	for log in LOG_CHOICES:
 		full_path = get_log_path (log)
-				
+
 		mod_time = 0
 		#TODO: check for permissions issue
 
@@ -2001,16 +2191,16 @@ def print_log_info():
 				mod_time = os.path.getmtime(full_path)
 			except FileNotFoundError:
 				pass
-		
+
 		if mod_time > 0:
 			mod_timestamp = time.ctime(mod_time)
-			
+
 			stat_info = os.stat(full_path)
-			
+
 			# As of Python 3.12, st_birthtime is only available on macOS & Windows
 			# ubuntu: stat -c "%w" Access.log
 			# macos:  stat -f "%B"
-			
+
 			if platform.system() == 'Linux':
 				# TODO: Replace with a more accurate method unless st_birthtime fixed in Python 3.15
 				create_timestamp = subprocess.run(
@@ -2021,7 +2211,7 @@ def print_log_info():
 			else:
 				create_timestamp = time.ctime(stat_info.st_birthtime)
 				#create_timestamp = datetime.datetime.fromtimestamp(stat_info.st_birthtime).isoformat()
-			
+
 			size = stat_info.st_size
 			print(f'{log:21} {size:>11,}  {create_timestamp:<25}  {mod_timestamp:<25}  {full_path:<40}')
 		else:
@@ -2031,6 +2221,7 @@ def print_log_info():
 				print(f'{log:21}              <missing>')
 
 	print ()
+	print_crash_reports()
 
 
 #
@@ -2568,6 +2759,29 @@ def scan_file_last_match (log_path: str, match_str: str) -> str:
 	return last_match
 
 
+#
+#   s e n d _ s i g n a l _ t o _ p r o c e s s
+#
+
+def send_signal_to_process(pid: int, signal='USR1') ->bool:
+	"""
+	Send a signal to a process, eg: kill -USR1 `pgrep fmserverd`
+	Implemented via shell instead of os.kill to allow use of sudo.
+	Returns True if the signal was sent successfully.
+	"""
+		
+	try:
+		service_proc = subprocess.run(
+				['sudo', 'kill', '-' + signal, str (pid)],
+				capture_output=True,
+				text=True,
+				check=True)
+	except subprocess.CalledProcessError:
+		return False
+
+	return True	
+
+
 class Spinner:
 	"""
 	Implements a spinning cursor for longer running processes.
@@ -2702,6 +2916,8 @@ class TailPrint:
 		except KeyboardInterrupt:
 			pass
 
+	#	c h e c k _ f i l e _ v a l i d i t y
+
 	def check_file_validity(self, file_):
 		''' Check whether the a given file exists, readable and is a file '''
 		if not os.access(file_, os.F_OK):
@@ -2788,6 +3004,19 @@ def handle_named_options (args) -> bool:
 		handle_set (args.set[0], args.set[1])
 		ignore_positionals = True
 
+	if args.restart_fms:
+		manage_fms_service('stop')
+		manage_fms_service('start')
+		ignore_positionals = True
+
+	if args.start_fms:
+		manage_fms_service('start')
+		ignore_positionals = True
+
+	if args.stop_fms:
+		manage_fms_service('stop')
+		ignore_positionals = True
+
 	if args.user:
 		USER = args.user		
 
@@ -2860,7 +3089,8 @@ def main():
 		# TAILING/FOLLOWING LOGS
 
 		if (isinstance (args.tail, bool) and args.tail) or (isinstance (args.tail,list) and args.tail[0] > 0):
-			# Instead of printing the current tail or head, wait for new messages
+			print_tail (log_name, 15, SHOW_HEADERS, SUCCINCT_MODE) 
+			# For the remainder of the output wait for new messages
 			tailer = TailPrint (args.logs)
 			if isinstance (args.tail, list):
 				tailer.follow(args.tail[0])

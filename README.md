@@ -82,7 +82,7 @@ options:
   --help                    display command details
   -H, --headers-off         turn off headers for all logs
   -i, --ignore-case			make filter's regex case insensitive
-  -l, --list                list all log files, including size, date created & modified, sorted by modification time
+  -L, --list                list all log files, including size, date created & modified, sorted by modification time
   -n, --number RANGE        quantity of lines to print
   -N, --network             network usage info
   -P, --process-info		metrics for FMS processes
@@ -117,11 +117,13 @@ the boot drive had been renamed at some point.
 Verify connectivity to various server components, and display SSL TLS version and hostnames. Where possible, both internal and external interfaces are checked, since
 external connections are routed via a reverse proxy through the web server (Apache, IIS, NGINX). Also see the related -N/--network option.
 
+Testing after connecting to a VPN may interfere with the results.
+
 ### -D, --data
 Using values based on the last relevant message in the Event log, display the current database directories being used and their sizes, splitting out any
 optional external container directories.
 
-For the total size values with Default and Secure folders does not include the enclosed RC_Data_FMS folders, which are totaled separately.
+The total size values for Default and Secure folders does not include the enclosed RC_Data_FMS folders, which are totaled separately.
 
 ### --dir
 Print the directory path for the given log name. Could be used in shell command like this:
@@ -153,7 +155,7 @@ Normally, unless tailing a log or printing a log that does not have any fixed co
 ### -i, --ignore-case
 If using the -f/--filter option, this option will cause any pattern searches to be case insensitive.
 
-### -l, --list
+### -L, --list
 List all log names and paths for the current platform. For logs that are present, list their creation and modification timestamps and their size.
 
 ### -n, --number
