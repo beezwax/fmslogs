@@ -82,11 +82,13 @@ options:
   --help                    display command details
   -H, --headers-off         turn off headers for all logs
   -i, --ignore-case			make filter's regex case insensitive
-  -L, --list                list all log files, including size, date created & modified, sorted by modification time
+  -L, --list                list all log files and crash reports, including size, date created & modified, sorted by modification time
   -n, --number RANGE        quantity of lines to print
   -N, --network             network usage info
   -P, --process-info		metrics for FMS processes
   -S, --set SET             change log configuration options
+  --start-fms               start the FileMaker Server service
+  --stop-fms                stop the FileMaker Server service
   -s, --succinct            strip less useful details from log output (partially implemented)
   -t, --tail                wait for any new messages after printing current end of log
   --truncate                cut off any output if beyond width of screen
@@ -157,6 +159,7 @@ If using the -f/--filter option, this option will cause any pattern searches to 
 
 ### -L, --list
 List all log names and paths for the current platform. For logs that are present, list their creation and modification timestamps and their size.
+Any FMS crash reports are also listed here.
 
 ### -n, --number
 Number of log message lines or screens to print. For screens, add 's' as a suffix, e.g. '-n 2s' for two screens. Since some messages may not fit current screen size

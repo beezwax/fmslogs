@@ -35,7 +35,7 @@ POSSIBLE NEW OPTIONS
 	paged output
 	remote/external log source via SSH
 	for succinct mode, change 'Information' to 'Info' and 'Warning' to 'Warn' (Error will then be longest)
-	stop/start/restart FMS service
+	list usage in Data/Caches
 
 EXAMPLES OF UNIMPLEMENTED USAGE
 	fmslog --ssh simon@server.beezwax.net topcall  # if using user's default 'SSH key
@@ -1615,8 +1615,7 @@ def list_active_ports() -> list:
 	open_list = []
 	
 	if curr_platform == 'Darwin' or curr_platform == 'Linux':
-		if os.getuid() != 0:
-			print ('Running lsof command with sudo, you may be prompted for credentials.')
+		sudo_preflight()
 		# Could've used -F here, but seems easier to process formatted output.
 		lsof_lines = subprocess.run(['sudo','lsof', '-P', '-u', 'fmserver', '+c15'], capture_output=True, text=True).stdout.split('\n')
 		for line in lsof_lines:
@@ -1709,14 +1708,8 @@ def manage_fms_service (action: str) -> bool:
 
 		fms_pid = get_fms_pid()
 
-		if os.getuid() != 0:
-			print ('Running commands with sudo, you may be prompted for password.')
-			subprocess.run(
-				['sudo', '-v'],
-				capture_output=False,
-				text=True,
-				check=False)
-			
+		sudo_preflight()
+
 		if action == 'stop':
 			if fms_pid:
 				print ('Ensuring that databases are closed cleanly before stopping FMS...', end='', flush=True)
@@ -1755,7 +1748,7 @@ def manage_fms_service (action: str) -> bool:
 				text=True,
 				check=False)
 			print ('done.')
-	
+
 	else:
 		# Windows not yet implemented
 		return False
@@ -2537,9 +2530,15 @@ def print_tls_version (host: str, port=443) -> bool:
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		sock.settimeout (4)
 		ssock = context.wrap_socket(sock, server_hostname=host)
+		
+		# TODO: exception if FMS not running
+		
 		ssock.connect ((host, port)) # we are ignoring the connection value
 		return_flag = True
 		print('SSL/TLS version:', ssock.version())
+	except ConnectionRefusedError:
+		print ('SSL/TLS version: ', end='')
+		print_error (f'Error, could not connect to {host}:{port}')
 	except ssl.SSLError as e:
 		print_error ('  ', str (e))
 	finally:
@@ -2860,6 +2859,23 @@ def strip_line (log_name: str, line: str) -> str:
 		line = line [:23] + line [29:45] + line[62:]			# remove timezone & hostname
 
 	return line
+
+
+def sudo_preflight():
+	"""
+	Check if user need to re-enable sudo access to avoid
+	it coming up unexpectedly later.
+	"""
+	try:
+		if os.getuid() != 0:
+			print ('Running commands with sudo, you may be prompted for password.')
+			subprocess.run(
+				['sudo', '-v'],
+				capture_output=False,
+				text=True,
+				check=False)
+	except KeyboardInterrupt:
+		sys.exit(0)
 
 
 # =================
