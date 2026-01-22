@@ -619,7 +619,7 @@ def check_endpoint_status (name: str, host: str, endpoint: str, expected_status:
 				result_flag = True
 		else:
 			if response.reason:
-				print (response.reason)
+				print_error (response.reason)
 			else:
 				print_error ('Error, connection failed')
 	except http.client.HTTPException as e:
@@ -1160,7 +1160,7 @@ def get_folder_stats (path='.', exclude_dir=None) -> tuple:
 				if entry.is_file():
 					total += entry.stat().st_size
 					file_count += 1
-					if (os.stat(entry).st_nlink > 1):
+					if os.stat(entry).st_nlink > 1:
 						hard_linked += entry.stat().st_size
 				elif entry.is_dir():
 					if entry.name != exclude_dir:
@@ -2122,6 +2122,8 @@ def print_fmtmp_info():
 
 	print (f'{path_label:24}  {file_count:>11,}  {size_sum:>16,}')
 
+def print_fms_cache_info():
+
 
 def print_log (log_name: str, count: int):
 	"""
@@ -3069,11 +3071,11 @@ def main():
 		
 		if args.head:
 			OUTPUT_MODE = OutputMode.HEAD
-		
+	
 		if args.begin:
 			# Use head mode with the -b option
 			OUTPUT_MODE = OutputMode.HEAD
-		
+
 		if args.headers_off:
 			SHOW_HEADERS = False
 		
