@@ -1916,7 +1916,7 @@ def print_backup_info():
 					size,file_count,hl_size = get_folder_stats(full_path)
 					print(f'{file_count:11,}  {size:16,}  {hl_size:16,}  {full_path}')
 			else:
-				print_error ('Empty or Missing:', location)
+				print_error ('Empty or Missing: ' + location)
 			print ()
 	else:
 		print ('No scheduled backup locations defined')
@@ -2071,6 +2071,7 @@ def print_data_dirs_info():
 	print ()
 	print ('=== OTHER DATA DIRECTORIES & FILES ===')
 	print ()
+	print_fms_cache_info()
 	print_documents_info()
 	print_fmtmp_info()
 	print ()
@@ -2085,10 +2086,10 @@ def print_documents_info():
 	Display information about FMS's Documents folder.
 	"""
 	documents_path = os.path.join (BASE_PATH, 'Data','Documents') 
-	with Spinner ('FMS Documents            '):
+	with Spinner ('Documents                '):
 		documents_size,file_count,hl_size = get_folder_stats (documents_path)
 	# Any point in displaying if has hard links?
-	print (f'{file_count:11,}  {documents_size:16,}')
+	print (f'{file_count:11,}  {documents_size:16,}                    {documents_path}')
 
 #
 #	p r i n t _ f m t m p _ i n f o
@@ -2108,7 +2109,7 @@ def print_fmtmp_info():
 	"""
 	Display information about FMS' usage of FMTEMP* files in /tmp.
 	"""
-	path_label = '/tmp/FMTMPFM*'
+	path_label = 'FMTMPFM files'
 	tmp_path = '/tmp/FMTEMPFM*'
 
 	path_list = glob.glob (tmp_path)
@@ -2120,9 +2121,19 @@ def print_fmtmp_info():
 			stat_info = os.stat(file)
 			size_sum += stat_info.st_size
 
-	print (f'{path_label:24}  {file_count:>11,}  {size_sum:>16,}')
+	print (f'{path_label:24}  {file_count:>11,}  {size_sum:>16,}                    {tmp_path}')
+
 
 def print_fms_cache_info():
+	"""
+	Display information about FMS' cache usage.
+	"""
+	cache_path = os.path.join (BASE_PATH, 'Data', 'Cache')
+
+	path_label = 'FMS Cache'
+	cache_size,file_count,hl_size = get_folder_stats (cache_path)
+
+	print (f'{path_label:24}  {file_count:11,}  {cache_size:16,}                    {cache_path}')
 
 
 def print_log (log_name: str, count: int):
