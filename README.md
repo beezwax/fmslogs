@@ -41,10 +41,9 @@ Current functionality with major issues:
 - `-B` or `--backups`: may list backup sets twice if target dir is used more than once but using different path
 - `-C` or `--check-connectivity`: VPN connection may confuse tests
 - `-m` or `--merge`: not implemented
-- `-S` or `--set`: not working except for `enable/disable debuglogging`
 - `-s` or `--succinct`: partially implemented
 - `--ssh`: not implemented
-- `-t` or `--tail`: does not print current log segment before starting to follow/tail
+- `-t` or `--tail`: may not print current log segment before starting to follow/tail
 - nginx/apache/IIS: log parsing not fully implemented
 
 ---
@@ -177,8 +176,11 @@ Shorten the output of log lines where possible. This includes things like redund
 
 ### -S, --set VERB NOUN
 Change FMS configuration options. It takes two parameters, a noun and a verb. Currently, verbs are `enable` or `disable`.
-The only supported noun is `debuglogging` to enable the detailed FMS logs such as fmsDebug.log. When enabled, this will
-significantly slow down some server operations and the log files can get large quickly.
+The supported nouns are:
+- `debuglogging`: detailed FMS logs such as fmsDebug.log; This can significantly slow down some server operations and quickly create large log files
+- `clientstats`: user specific statistics for each log interval
+- `serverstats`: database engine statistics
+- `topcallstats`: statistics for top 25 calls
 
 ### -t, --tail
 Print messages as they are added to log files until user cancels with Ctrl-C.

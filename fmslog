@@ -416,8 +416,10 @@ LOG_SPECS_LINUX = {
 	'nginxaccess': {
 		'path': 'NginxServer/logs/nginx-access.log',
 		'lghd': True,
-		'head': None,
-		'tbst': 8
+		'head': 'nginx-access.log\n' + \
+				'TIMESTAMP                  STATUS          SIZE  ADDRESS          USER                REQUEST                                                                 AGENT         REFERRER',
+		'tbst': [], # [17,36,64,125,131,140,170],
+		'frmt': '{time_iso8601}  {status:6}  {bytes_sent:12,}  {remote_addr:15}  {remote_user:18}  {request:70}  {http_user_agent:12}  {http_referer:8}'
 	},
 
 	'nginxerror': {
@@ -941,6 +943,8 @@ def expand_tabs_for_line (log_name: str, line: str) -> str:
 	Expands tabs in the string `line` using the given tabstops.
 	`tabstops` can be a list of column positions (e.g., [4, 8, 12]) or a single integer for fixed tab width.
 	TODO: truncate if over column width?
+	TODO: strip newline at start?
+	TODO: convert to formatting method used by nginxaccess log
 	"""
 	
 	try:
@@ -970,6 +974,15 @@ def expand_tabs_for_line (log_name: str, line: str) -> str:
 		match = re.match (r'\[(.*) (.*)\] (.*) (.*) (.*) "(.*)" (\d*)', line)
 		line = match.group (1) + ' ' + match.group(2) + '\t' + match.group(3) + '\t' + match.group(4) + '\t' + match.group(5) + '\t' + match.group(6) + '\n'
 
+	if log_name in ['nginxaccess']:
+		cols = line.split('\t')
+		# 		'frmt': f'{time_iso8601}  {status:6}  {bytes_sent:12,}  {remote_addr:15}  {remote_user:18}   {request:70}  {http_user_agent:12}  {http_referer:8}'
+		try:
+			line = LOG_SPECS [log_name]['frmt'].format (remote_addr = cols[0], remote_user = cols[1], time_iso8601 = cols[2], request = cols[3], status = cols[4], bytes_sent = int(cols[5]), http_user_agent = cols[7].rstrip(), http_referer = cols[6])
+		except (IndexError, ValueError):
+			pass 		# if error, just leave line as-is
+		# Did our own formatting here, so tab expansion won't be needed.
+
 	result = []
 
 	parts = line.split('\t')
@@ -998,6 +1011,10 @@ def expand_tabs_for_line (log_name: str, line: str) -> str:
 			return line
 	else:
 		return ''.join(result)
+
+#
+#	class  F i l e C h e c k E r r o r
+#
 
 class FileCheckError(Exception):
 	def __init__(self, msg):
