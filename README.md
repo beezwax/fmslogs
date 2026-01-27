@@ -2,13 +2,12 @@
 ## Display FileMaker Server logs & resource usage
 
 Some things that it does that using just tail, head, or Get-Content don't:
-- displays headers for columns, even if not showing first row
-- improved formatting, including consistent column alignments
+- improved formatting, including consistent column alignments with headers
 - quickly display or open logs in editor (don't have to type full log path)
 - limit messages to those only after a given timestamp or duration
 - lists path, size, and modification dates for all logs
 - optionally truncate lines to avoid line wrap
-- network ports in use
+- FMS processes and network ports in use
 - sizes of database directories
 - connectivity tests for 10 different FMS endpoints
 - list versions of FMS components (NodeJS, Tomcat, etc.)

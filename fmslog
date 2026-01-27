@@ -43,7 +43,7 @@ EXAMPLES OF UNIMPLEMENTED USAGE
 Reset repo:  git fetch origin main; git reset --hard origin/main
 """
 
-VERSION = "0.37 - 2026-01-19"
+VERSION = "0.38 - 2026-01-26"
 
 TIMESTAMP_START = None
 FILTER_REGEX = None
@@ -1291,19 +1291,22 @@ def get_tomcat_version() -> str:
 	"""
 	tomcat_out = None
 	
-	if platform.system() == 'Darwin':
-		tomcat_out = subprocess.run(
-			[BASE_PATH + '/Web Publishing/java/bin/java', '-cp', '/Library/FileMaker Server/Web Publishing/publishing-engine/jwpc-tomcat/lib/catalina.jar', 'org.apache.catalina.util.ServerInfo'],
-			capture_output=True,
-			text=True,
-			check=False).stdout
-	if platform.system() == 'Linux':
-		tomcat_out = subprocess.run(
-			[BASE_PATH + '/usr/bin/java', '-cp', '/opt/FileMaker/FileMaker Server/Web Publishing/publishing-engine/jwpc-tomcat/lib/catalina.jar', 'org.apache.catalina.util.ServerInfo'],
-			capture_output=True,
-			text=True,
-			check=False).stdout
-		
+	try:
+		if platform.system() == 'Darwin':
+			tomcat_out = subprocess.run(
+				[BASE_PATH + '/Web Publishing/java/bin/java', '-cp', '/Library/FileMaker Server/Web Publishing/publishing-engine/jwpc-tomcat/lib/catalina.jar', 'org.apache.catalina.util.ServerInfo'],
+				capture_output=True,
+				text=True,
+				check=False).stdout
+		if platform.system() == 'Linux':
+			tomcat_out = subprocess.run(
+				[BASE_PATH + '/usr/bin/java', '-cp', '/opt/FileMaker/FileMaker Server/Web Publishing/publishing-engine/jwpc-tomcat/lib/catalina.jar', 'org.apache.catalina.util.ServerInfo'],
+				capture_output=True,
+				text=True,
+				check=False).stdout
+	expect FileNotFoundError:
+		pass
+				
 	if tomcat_out:
 		return re.search (r'Server number:  (.*)', tomcat_out).group(1)
 	else:
@@ -1635,7 +1638,7 @@ def init_parser() -> argparse.ArgumentParser:
 	parser.add_argument('-i', '--ignore-case', action='store_true', help='ignore case with filter')
 	parser.add_argument('-L', '--list', action='store_true', help='list all log files, including size, date created & modified, sorted by modification time')
 	parser.add_argument('-m', '--merge', action='store_true', help='combine output of two or more logs based on the message timestamps')
-	parser.add_argument('-n', '--number', nargs=1, default=['1s'], help='range or number of lines to print')
+	parser.add_argument('-n', '--number', nargs=1, default=['1s'], help='number of lines to print')
 	parser.add_argument('-N', '--network', action='store_true', help='list connections and their status') # TODO: throwing "expected log name" error
 	parser.add_argument('-P', '--process-info', action='store_true', dest='process_info', help='list FMS related processes and their stats')
 	parser.add_argument('-p', '--password', help='for FMS console access')
