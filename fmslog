@@ -19,7 +19,9 @@ import os
 import pathlib
 import platform
 import pprint
-import pwd, re, shutil, signal
+import pwd
+import re
+import shutil
 import socket, subprocess, socket, sys
 import tempfile, textwrap, threading, time, ssl, urllib.request
 from enum import Enum
@@ -44,6 +46,35 @@ Reset repo:  git fetch origin main; git reset --hard origin/main
 """
 
 VERSION = "0.38 - 2026-01-26"
+
+#
+#	g e t _ f m s _ v e r s i o n
+#
+
+def get_fms_version() -> str:
+	"""
+	Fetch the version of FileMaker Server currently installed.
+	"""
+	# TODO: handle if not installed
+	
+	if platform.system() == 'Darwin':
+		fmsout_lines = subprocess.run(
+			['/usr/sbin/pkgutil', '--pkg-info','com.filemaker.fms.worker.pkg'],
+			capture_output=True,
+			text=True,
+			check=False).stdout.split('\n')
+		return fmsout_lines[1].split(': ')[1]
+		
+	elif platform.system() == 'Linux':
+		fmsout_lines = subprocess.run(['/usr/bin/apt-cache', 'policy', 'filemaker-server'], capture_output=True, text=True).stdout.split('\n')
+		return fmsout_lines[1].split(': ')[1]
+	
+	if platform.system() == 'Windows':
+		return 'not implemented'
+	
+	return 'Unknown platform'
+
+FMS_VERSION = get_fms_version()
 
 TIMESTAMP_START = None
 FILTER_REGEX = None
@@ -412,16 +443,7 @@ LOG_SPECS_LINUX = {
 		'head': None,
 		'tbst': []	# replace any tabs with two spaces
 	},
-
-	'nginxaccess': {
-		'path': 'NginxServer/logs/nginx-access.log',
-		'lghd': True,
-		'head': 'nginx-access.log\n' + \
-				'TIMESTAMP                  STATUS          SIZE  ADDRESS          USER                REQUEST                                                                 AGENT         REFERRER',
-		'tbst': [], # [17,36,64,125,131,140,170],
-		'frmt': '{time_iso8601}  {status:6}  {bytes_sent:12,}  {remote_addr:15}  {remote_user:18}  {request:70}  {http_user_agent:12}  {http_referer:8}'
-	},
-
+	
 	'nginxerror': {
 		'path': 'NginxServer/logs/nginx-error.log',
 		'lghd': True,  
@@ -442,6 +464,30 @@ LOG_SPECS_LINUX = {
 		'tbst': 8
 	},
 }
+
+if FMS_VERSION.startswith ('21'):
+	NGINX_ACCESS = {
+		'nginxaccess': {
+			'path': 'NginxServer/logs/access.log',
+			'lghd': True,
+			'head': 'access.log\n' + \
+					'TIMESTAMP                  STATUS          SIZE  ADDRESS          USER                REQUEST                                                                 AGENT         REFERRER',
+			'tbst': [], # [17,36,64,125,131,140,170],
+			'frmt': '{time_iso8601}  {status:6}  {bytes_sent:12,}  {remote_addr:15}  {remote_user:18}  {request:70}  {http_user_agent:12}  {http_referer:8}'
+		}
+	}
+else:
+	NGINX_ACCESS = {
+		'nginxaccess': {
+			'path': 'NginxServer/logs/nginx-access.log',
+			'lghd': True,
+			'head': 'nginx-access.log\n' + \
+					'TIMESTAMP                  STATUS          SIZE  ADDRESS          USER                REQUEST                                                                 AGENT         REFERRER',
+			'tbst': [], # [17,36,64,125,131,140,170],
+			'frmt': '{time_iso8601}  {status:6}  {bytes_sent:12,}  {remote_addr:15}  {remote_user:18}  {request:70}  {http_user_agent:12}  {http_referer:8}'
+		}
+	}
+LOG_SPECS_LINUX.update (NGINX_ACCESS)
 
 LOG_SPECS_APACHE = {
 	'httpaccess': {
@@ -1304,9 +1350,9 @@ def get_tomcat_version() -> str:
 				capture_output=True,
 				text=True,
 				check=False).stdout
-	expect FileNotFoundError:
+	except FileNotFoundError:
 		pass
-				
+	
 	if tomcat_out:
 		return re.search (r'Server number:  (.*)', tomcat_out).group(1)
 	else:
@@ -1405,8 +1451,8 @@ def get_network_address() -> str:
 	Result may contain multiple space delimited addresses.
 	"""
 
-	eventPath = get_log_path ('event')
-	match = scan_file_last_match (eventPath, r'Network address.*: (.*)')
+	event_path = get_log_path ('event')
+	match = scan_file_last_match (event_path, r'Network address.*: (.*)')
 	if not match:
 		return 'No matches in current Event.log'
 
@@ -1483,33 +1529,6 @@ def get_fms_pid() -> int:
 	return fms_pid
 
 #
-#	g e t _ f m s _ v e r s i o n
-#
-
-def get_fms_version() -> str:
-	"""
-	Fetch the version of FileMaker Server currently installed.
-	"""
-	# TODO: handle if not installed
-	
-	if platform.system() == 'Darwin':
-		fmsout_lines = subprocess.run(
-			['/usr/sbin/pkgutil', '--pkg-info','com.filemaker.fms.worker.pkg'],
-			capture_output=True,
-			text=True,
-			check=False).stdout.split('\n')
-		return fmsout_lines[1].split(': ')[1]
-		
-	elif platform.system() == 'Linux':
-		fmsout_lines = subprocess.run(['/usr/bin/apt-cache', 'policy', 'filemaker-server'], capture_output=True, text=True).stdout.split('\n')
-		return fmsout_lines[1].split(': ')[1]
-	
-	elif platform.system() == 'Windows':
-		return 'not implemented'
-	
-	return 'Unknown platform'
-
-#
 #	g e t _ p r o g r e s s i v e s _ p a t h
 #
 
@@ -1520,7 +1539,7 @@ def get_progressives_path() -> str:
 	#  name="IncrementalBackupPath">filelinux:/FileMakerData/Progressive/</key>
 
 	progressives_path = None
-	
+
 	# There are two forms of the BackupTarget key, depending on where the type is defined.
 	backupRE = re.compile (r'name="IncrementalBackupPath">(.*)</key>')
 
@@ -1530,7 +1549,7 @@ def get_progressives_path() -> str:
 			if match and match.group:
 				progressives_path = convert_filemaker_path (match.group(1))
 				break
-	
+
 	return progressives_path
 
 #
@@ -1541,7 +1560,7 @@ def get_vaadin_version() -> str:
 	"""
 	Get the Vaadin version based off of the name of the installed vaadin-server lib file.
 	"""
-	
+
 	# Only match server-# so that -gae or -mpr is not included. 
 	vaadinLibServerPath = BASE_PATH + '/Web Publishing/publishing-engine/jwpc-tomcat/fmi/WEB-INF/lib/vaadin-server-[1-9]*.fmi.jar'
 	path_list = glob.glob (vaadinLibServerPath)
@@ -1550,7 +1569,7 @@ def get_vaadin_version() -> str:
 		vaadin_str = match.group(1)
 	else:
 		vaadin_str = '<missing>'
-	
+
 	return vaadin_str
 
 
@@ -1562,14 +1581,14 @@ def handle_set (verb: str, noun: str):
 	"""
 	Execute the config changes specified in parameters.
 	"""
-	
+
 	valid_options = False	# may still fail for other reasons
-	
+
 	if verb not in ['enable','disable']:
 		print ('Error: unrecognized parameter for set:', verb)
 		print ('Use "enable" or "disable" instead.')
 		return
-	
+
 	if noun == 'debuglogging':
 		if platform.system() in ['Darwin', 'Linux']:
 			claris_config_dir = BASE_PATH + '/Database Server/bin'
@@ -1913,7 +1932,7 @@ def process_info ():
 #	p a r s e _ b e g i n _ t i m e
 #
 
-def parse_begin_time (timeStr: str) -> datetime.datetime:
+def parse_begin_time (time_str: str) -> datetime.datetime:
 	"""
 	Convert the various possible time values into a timestamp value. Some
 	possible values could be '30s' for 30 seconds from now, or '14:00:10'
@@ -1923,9 +1942,9 @@ def parse_begin_time (timeStr: str) -> datetime.datetime:
 	new_time = None
 	
 	# Duration value or a timestamp?
-	m = re.search('[0-9]{0,6}[smhd]', timeStr)
+	m = re.search('[0-9]{0,6}[smhd]', time_str)
 	if m.group(0):
-		if len (timeStr) == len (m.group(0)):
+		if len (time_str) == len (m.group(0)):
 			new_time = datetime.datetime.now()
 			unit = m.group(0)[-1]
 			unit_count = 1
@@ -2036,7 +2055,7 @@ def print_crash_reports() -> str:
 					mtime = datetime.datetime.fromtimestamp(stat_info.st_mtime)
 					fmserver_files.append((entry.name, stat_info.st_size, mtime))
 	except PermissionError:
-		print(f"Permission denied, run with sudo or as root")
+		print('Permission denied, run with sudo or as root')
 		return
 	
 	if fmserver_files:
