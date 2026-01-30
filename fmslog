@@ -54,17 +54,20 @@ VERSION = "0.38 - 2026-01-26"
 def get_fms_version() -> str:
 	"""
 	Fetch the version of FileMaker Server currently installed.
+	Return empty str if no version detected.
 	"""
 	# TODO: handle if not installed
 	
 	if platform.system() == 'Darwin':
-		fmsout_lines = subprocess.run(
-			['/usr/sbin/pkgutil', '--pkg-info','com.filemaker.fms.worker.pkg'],
-			capture_output=True,
-			text=True,
-			check=False).stdout.split('\n')
-		return fmsout_lines[1].split(': ')[1]
-		
+		try:
+			fmsout_lines = subprocess.run(
+				['/usr/sbin/pkgutil', '--pkg-info','com.filemaker.fms.worker.pkg'],
+				capture_output=True,
+				text=True,
+				check=False).stdout.split('\n')
+			return fmsout_lines[1].split(': ')[1]
+		except IndexError:
+			return ''
 	elif platform.system() == 'Linux':
 		fmsout_lines = subprocess.run(['/usr/bin/apt-cache', 'policy', 'filemaker-server'], capture_output=True, text=True).stdout.split('\n')
 		return fmsout_lines[1].split(': ')[1]
@@ -666,7 +669,7 @@ def check_endpoint_status (name: str, host: str, endpoint: str, expected_status:
 				else:
 					print_error ('Error, unexpected response')
 			elif endpoint.startswith ('/fmi/odata'):
-				if body.startswith ('{"@context": "https'):
+				if body.startswith ('{"error": {"code": "18",') or body.startswith ('{"@context": "https'):
 					print ('Responding')
 					result_flag = True
 				else:
