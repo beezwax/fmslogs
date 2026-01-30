@@ -13,6 +13,7 @@ import datetime
 import glob
 import http.client
 import itertools
+import json
 import linecache
 import mmap
 import os
@@ -693,6 +694,75 @@ def check_endpoint_status (name: str, host: str, endpoint: str, expected_status:
 	return result_flag
 
 #
+#	c h e c k _ w e b d i r e c t _ s t a t u s
+#
+
+def check_webdirect_status(host: str, port=443, useSSL=True) -> bool:
+	"""
+	Check WebDirect component status from /fmi/mwpem/info endpoint.
+	Prints whether cwpc and jwpc are running and if autostart is enabled.
+	"""
+	result_flag = False
+	print(f'Checking Port {port}, WebDirect - CWPC/JWPC: ', end='', flush=True)
+	
+	if useSSL:
+		endpoint = '/fmi/mwpew/wpe/info'
+		conn = http.client.HTTPSConnection(host, port, context=ssl._create_unverified_context(), timeout=4)
+	else:
+		endpoint = '/fmswpew/wpe/info'
+		conn = http.client.HTTPConnection(host, port, timeout=4)
+	
+	try:
+		conn.request('GET', endpoint)
+		response = conn.getresponse()
+		
+		if response.status == 200:
+			body = response.read().decode('utf-8')
+			try:
+				data = json.loads(body)
+				
+				if data.get('result') == 0:
+					print('Responding')
+					result_flag = True
+					
+					# Check cwpc status
+					if 'cwpc' in data:
+						cwpc = data['cwpc']
+						running_status = 'Running' if cwpc.get('running') else 'Not Running'
+						autostart_status = 'ON' if cwpc.get('autoStart') else 'OFF'
+						print(f'  cwpc: {running_status}, AutoStart: {autostart_status}')
+					else:
+						print('  cwpc: Status unavailable')
+					
+					# Check jwpc status
+					if 'jwpc' in data:
+						jwpc = data['jwpc']
+						running_status = 'Running' if jwpc.get('running') else 'Not Running'
+						autostart_status = 'ON' if jwpc.get('autoStart') else 'OFF'
+						print(f'  jwpc: {running_status}, AutoStart: {autostart_status}')
+					else:
+						print('  jwpc: Status unavailable')
+				else:
+					print_error(f'Error result: {data.get("result")}')
+			except json.JSONDecodeError as e:
+				print_error(f'Failed to parse JSON response: {e}')
+		else:
+			if response.reason:
+				print_error(response.reason)
+			else:
+				print_error('Error, connection failed')
+	except http.client.HTTPException as e:
+		print_error(str(e))
+	except ConnectionRefusedError as e:
+		print_error(str(e))
+	except Exception as e:
+		print_error(str(e))
+	finally:
+		conn.close()
+	
+	return result_flag
+
+#
 #	c h e c k _ t c p _ s t a t u s
 #
 
@@ -798,8 +868,13 @@ def check_connectivity():
 	check_endpoint_status ('Port 16021, WebDirect - Internal: ', intern_addr, webdEndpoint, 200, port=16021)
 	check_endpoint_status ('Port 443, WebDirect - External: ', extern_addr, webdEndpoint, 200, useSSL=True)
 
+	# WEBD INFO
+	check_webdirect_status(intern_addr, port=16002, useSSL=False)
+	check_webdirect_status(extern_addr)
+
 	# alternate: curl -vk -X DELETE https://127.0.0.1/fmi/admin/api/v2/user/auth/abcdef0123456789
 	print ()
+
 
 #
 #	c h e c k _ f i l e _ v a l i d i t y

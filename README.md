@@ -30,6 +30,7 @@ Design Goals:
 * Top Call statistics logging: https://support.claris.com/s/answerview?anum=000025776
 * Tracking activity in log files in FileMaker Server: https://support.claris.com/s/article/Tracking-activity-in-log-files-in-FileMaker-Server-1503692942153
 * FileMakerPortScanner: https://github.com/DimitrisKok/FileMakerPortScanner
+* How to Troubleshoot WebDirect Downtime in Your FileMaker Application: https://www.soliantconsulting.com/blog/troubleshoot-filemaker-webdirect-downtime/
 
 ---
 
