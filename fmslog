@@ -8,7 +8,7 @@ Purpose: Display FileMaker Server logs, change logging options, and get resource
 """
 
 
-VERSION = "0.50 - 2026-06-12"
+VERSION = "0.51 - 2026-07-08"
 
 
 import argparse
@@ -1427,6 +1427,13 @@ class FileMakerAdminAPI:
 		"""
 		response = self._make_request('/plugins/DbsPluginConfig')
 		return response['response']['config']
+
+	def get_license_info(self) -> dict:
+		"""
+		Get the license being used for the server.
+		"""
+		response = self._make_request('/license/info')
+		return response ['response']
 
 	def get_wpe_plugin_config(self) -> dict:
 		"""
@@ -3224,6 +3231,12 @@ def print_host_info():
 		print (service_proc.stdout)
 
 		print ('SERVER CONFIG (Admin API)')
+
+		license_info = api.get_license_info()
+		print ('License Info = {')
+		license_str = pprint.pformat (license_info)
+		print ('', license_str[1:])
+		print ()
 
 		parallel_backups = api.get_server_parallel_backup_setting()
 		print (f'parallelBackupEnabled = {parallel_backups}')
