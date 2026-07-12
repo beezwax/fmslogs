@@ -8,13 +8,16 @@ Purpose: Display FileMaker Server logs, change logging options, and get resource
 """
 
 
-VERSION = "0.51 - 2026-07-08"
+VERSION = "0.52 - 2026-07-11"
 
+# Only using standard library modules.
 
 import argparse
 import base64
 #import curses
 import datetime
+import zipfile
+from enum import Enum
 import glob
 import http.client
 import itertools
@@ -38,7 +41,6 @@ import threading
 import time
 import ssl
 import urllib.request, urllib.parse, urllib.error
-from enum import Enum
 from contextlib import ExitStack
 
 #
@@ -132,6 +134,7 @@ SUCCINCT_MODE = False
 TRUNCATE_MODE = False
 PASSWORD = None
 USER = None
+CAPTURE_PATH = None
 
 try:
 	SCREENCOLS, SCREENROWS = os.get_terminal_size()
@@ -2535,6 +2538,7 @@ def init_parser() -> argparse.ArgumentParser:
 
 	parser.add_argument('-B', '--backups', action='store_true', help='list paths & sizes of backup sets')
 	parser.add_argument('-b', '--begin', nargs=1, help='start at first message on or after time or time interval')
+	parser.add_argument('--capture', nargs=1, metavar='ZIPFILE', help='save the named log files to a zip archive at the given path')
 	parser.add_argument('-C', '--check-connectivity', dest='check_connectivity', action='store_true', help='check connectivity of API endpoints')
 	parser.add_argument('-D', '--databases', action='store_true', help='display database, container, document, and temp directory info')
 	parser.add_argument('--dir', nargs=1, help='print the directory path of the named log')
@@ -3284,6 +3288,7 @@ def print_log (log_name: str, count: int):
 
 	lines_printed = -1
 	#print (OUTPUT_MODE)
+
 	
 	if OUTPUT_MODE is OutputMode.TAIL:
 		lines_printed = print_tail (log_name, count, SHOW_HEADERS, SUCCINCT_MODE)
@@ -4149,8 +4154,11 @@ def handle_named_options (args) -> bool:
 	positional parameters should be skipped.
 	"""
 
-	global FILTER_IGNORE_CASE, PASSWORD, TIMESTAMP_START, USER	
+	global CAPTURE_PATH, FILTER_IGNORE_CASE, PASSWORD, TIMESTAMP_START, USER	
 	ignore_positionals = False
+
+	if args.capture:
+		CAPTURE_PATH = args.capture[0]
 
 	if args.password:
 		PASSWORD = args.password
@@ -4287,6 +4295,30 @@ def main():
 				print ('Error:', log_name,'not a valid log name')
 				sys.exit (1)
 
+		# We now have a list a list of log names to print. Now determine how the logs should be handled (eg, tail, head, capture, etc).
+
+		# CAPTURE LOGS TO ZIP
+
+		if CAPTURE_PATH:
+			# Ideally, future version would honor the -b option and only capture logs after that timestamp.
+			zip_path = CAPTURE_PATH if CAPTURE_PATH.endswith('.zip') else CAPTURE_PATH + '.zip'
+			try:
+				with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+					for log_name in args.logs:
+						log_path = get_log_path(log_name)
+						if log_path:
+							try:
+								check_file_validity(log_path)
+								zf.write(log_path, arcname=os.path.basename(log_path))
+								print(f'   Added: {log_path}')
+							except FileCheckError as e:
+								print(f'Warning: skipping {log_name}: {e}')
+				print(f'\nLogs captured to: {zip_path}')
+			except PermissionError:
+				print(f'Error: cannot write to {zip_path}')
+				sys.exit(1)
+			break
+		
 		# TAILING/FOLLOWING LOGS
 
 		if (isinstance (args.tail, bool) and args.tail) or (isinstance (args.tail,list) and args.tail[0] > 0):

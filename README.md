@@ -60,6 +60,7 @@ options:
   -B, --backups             list scheduled backup sets present, including total number of files and size
   -b, --begin BEGIN         start at first message on or after time or time interval in BEGIN
   -C, --check-connectivity	test connectivity to FMS components
+  --capture                 create a .zip file containing the named logs
   -D, --data                list directories being used for databases, external container data, documents, and temp files
   -e, --edit                open the log in a text editor; first try $EDITOR, then GUI editor (macOS), then nano
   -f, --filter FILTER       only return lines matching regex expression FILTER
@@ -111,6 +112,9 @@ Verify connectivity to various server components, and display SSL TLS version an
 external connections are routed via a reverse proxy through the web server (Apache, IIS, NGINX). Also see the related -N/--network option.
 
 Testing after connecting to a VPN may interfere with the results.
+
+### --capture ARCHIVEFILE
+Create a .zip file containing all of the named logs.
 
 ### -D, --data
 Using values based on the last relevant message in the Event log, display the current database directories being used and their sizes, splitting out any
