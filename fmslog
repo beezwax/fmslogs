@@ -2554,7 +2554,7 @@ def init_parser() -> argparse.ArgumentParser:
 	parser.add_argument('-n', '--number', nargs=1, default=['1s'], help='number of lines to print')
 	parser.add_argument('-N', '--network', action='store_true', help='list connections and their status') # TODO: throwing "expected log name" error
 	parser.add_argument('-P', '--process-info', action='store_true', dest='process_info', help='list FMS related processes and their stats')
-	parser.add_argument('-p', '--password', help='for FMS console access')
+	parser.add_argument('-p', '--password', help='for FMS console access or API testing')
 	parser.add_argument('-S', '--set', nargs=2, help='change log configuration option')
 	parser.add_argument('-s', '--succinct', action='store_true', help='strip less useful details from log output')
 	#parser.add_argument('--ssh', nargs=1, help='use the connection string to fetch logs from remote server')
@@ -2566,7 +2566,7 @@ def init_parser() -> argparse.ArgumentParser:
 	parser.add_argument('--test-dapi', action='store_true', help='extended Data API (DAPI) checks; requires API_Testing file')
 	parser.add_argument('--test-odata', action='store_true', help='extended OData API checks; requires API_Testing file')
 	parser.add_argument('--truncate', action='store_true', help='cut off any output if beyond width of screen')
-	parser.add_argument('-u', '--user', help='FMS console or SSH account name')
+	parser.add_argument('-u', '--user', help='account name to use for FMS console or API test file')
 	parser.add_argument('-V', '--version', action='store_true', help='version info for fmslog and FMS')
 	# Hack to avoid error if there is only an option specified but no positional argument
 	parser.add_argument('logs', nargs='*', help='log name to display')
@@ -4312,8 +4312,8 @@ def main():
 								zf.write(log_path, arcname=os.path.basename(log_path))
 								print(f'   Added: {log_path}')
 							except FileCheckError as e:
-								print(f'Warning: skipping {log_name}: {e}')
-				print(f'\nLogs captured to: {zip_path}')
+								print(f'   Warning: {e}')
+				print(f'Logs captured to: {zip_path}')
 			except PermissionError:
 				print(f'Error: cannot write to {zip_path}')
 				sys.exit(1)

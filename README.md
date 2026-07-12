@@ -34,14 +34,16 @@ Current functionality with major issues:
 
 ---
 
-## INSTALLATION & REQUIREMENTS
+## REQUIREMENTS & INSTALLATION
+
+Requires Python 3.9 or newer. Only the standard Python library modules are used, so no additional installs should be needed.
 
 Copy the latest version of the `fmslog` file to a directory in user's command PATH:
 
 * macOS: `sudo curl -o /usr/local/bin/fmslog https://raw.githubusercontent.com/beezwax/fmslog/refs/heads/main/fmslog && sudo chmod +x /usr/local/bin/fmslog`
 * Ubuntu: `sudo curl -o /usr/bin/fmslog https://raw.githubusercontent.com/beezwax/fmslog/refs/heads/main/fmslog && sudo chmod +x /usr/bin/fmslog`
 
-Requires Python 3.9 or newer. On macOS, you may need to create the `/usr/local/bin` directory if FileMaker Server is not yet installed.
+For the above commandd on macOS, you may need to create the `/usr/local/bin` directory if FileMaker Server is not yet installed.
 
 ---
 
@@ -60,7 +62,7 @@ options:
   -B, --backups             list scheduled backup sets present, including total number of files and size
   -b, --begin BEGIN         start at first message on or after time or time interval in BEGIN
   -C, --check-connectivity	test connectivity to FMS components
-  --capture                 create a .zip file containing the named logs
+  --capture PATH            create a .zip file containing the named logs
   -D, --data                list directories being used for databases, external container data, documents, and temp files
   -e, --edit                open the log in a text editor; first try $EDITOR, then GUI editor (macOS), then nano
   -f, --filter FILTER       only return lines matching regex expression FILTER
@@ -74,14 +76,16 @@ options:
   -n, --number RANGE        quantity of lines to print
   -N, --network             network usage info
   -P, --process-info        metrics for FMS processes
+  -p                        password for admin console or API testing file access
   -S, --set SET             change log configuration options
   --start-fms               start the FileMaker Server service
   --stop-fms                stop the FileMaker Server service
   -s, --succinct            strip less useful details from log output (partially implemented)
   -t, --tail                wait for any new messages after printing current end of log
-  --test-dapi				perform various operations using the Data API; requires the API_Testing file to be hosted on the server
-  --test-odata				perform various operations using the OData API; requires the API_Testing file to be hosted on the server
+  --test-dapi               perform various operations using the Data API; requires the API_Testing file to be hosted on the server
+  --test-odata              perform various operations using the OData API; requires the API_Testing file to be hosted on the server
   --truncate                cut off any output if beyond width of screen
+  -u                        account name to use for FMS console or API testing file
   -V, --version             version info for fmslog and FMS components
 ```
 
@@ -163,6 +167,9 @@ you may want to use the --truncate option to have an exact fit.
 ### -N, --network
 List ports in use by FileMaker's processes.
 
+### -p PASSWORD
+Specify the password for FMS admin console or API testing file access.
+
 ### -P, --process-info
 Display metrics for all processes running under the fmserver user. Metrics include process ID, CPU & memory usage, and process start time.
 
@@ -192,6 +199,9 @@ The optional `time` command in the above example provides additional stats on CP
 
 ### --truncate
 Remove any output from the end of the line that would cause a line wrap for the current screen width.
+
+### -u USER
+Used to specify the account/user name for FMS admin console or API testing file access.
 
 ### -V, --version
 Print version of fmslog command and FileMaker Server components.
