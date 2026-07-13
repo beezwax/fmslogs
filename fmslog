@@ -50,7 +50,7 @@ from contextlib import ExitStack
 def get_fms_version() -> str:
 	"""
 	Fetch the version of FileMaker Server currently installed.
-	Return empty str if no version detected.
+	Return None if no version detected.
 	"""
 	# TODO: handle if not installed
 	
@@ -63,13 +63,13 @@ def get_fms_version() -> str:
 				check=False).stdout.split('\n')
 			return fmsout_lines[1].split(': ')[1]
 		except IndexError:
-			return '<missing>'
+			return None
 	elif platform.system() == 'Linux':
 		try:
 			fmsout_lines = subprocess.run(['/usr/bin/apt-cache', 'policy', 'filemaker-server'], capture_output=True, text=True).stdout.split('\n')
 			return fmsout_lines[1].split(': ')[1]
 		except IndexError:
-			return '<missing>'
+			return None
 
 	if platform.system() == 'Windows':
 		return 'not implemented'
@@ -2451,19 +2451,35 @@ def get_progressives_path() -> str:
 def get_vaadin_version() -> str:
 	"""
 	Get the Vaadin version based off of the name of the installed vaadin-server lib file.
+	Returns None if not found.
 	"""
 
+	vaadin_str = None
+
 	# Only match server-# so that -gae or -mpr is not included. 
-	vaadinLibServerPath = BASE_PATH + '/Web Publishing/publishing-engine/jwpc-tomcat/fmi/WEB-INF/lib/vaadin-server-[1-9]*.fmi.jar'
-	path_list = glob.glob (vaadinLibServerPath)
+	jar_path = BASE_PATH + '/Web Publishing/publishing-engine/jwpc-tomcat/fmi/WEB-INF/lib/vaadin-server-[1-9]*.fmi.jar'
+	path_list = glob.glob (jar_path)
 	if path_list:
 		match = re.search (r'server-(\d*\.\d*\.\d*)', path_list[0])
-		vaadin_str = match.group(1)
+		if match:
+			vaadin_str = match.group(1)
 	else:
-		vaadin_str = '<missing>'
+		# Fallback for newer installs where libraries are inside jwpc.war.
+		war_path = BASE_PATH + '/Web Publishing/publishing-engine/jwpc.war'
+		try:
+			zipinfo_out = subprocess.run(
+				['zipinfo', '-1', war_path],
+				capture_output=True,
+				text=True,
+				check=False
+			).stdout
+			match = re.search(r'vaadin-server-(\d+\.\d+\.\d+)(?:[^\n/]*)\.jar', zipinfo_out)
+			if match:
+				vaadin_str = match.group(1)
+		except FileNotFoundError:
+			pass
 
 	return vaadin_str
-
 
 #
 #	h a n d l e _ s e t
@@ -3127,16 +3143,45 @@ def print_documents_web_info():
 	# Any point in displaying if has hard links?
 	print (f'{file_count:11,}  {documents_size:16,}                    {documents_path}')
 
+#
+#	e r r o r _ s t r i n g
+#
+
+def error_string (msg: str) -> str:
+	"""
+	Return an error string with emphasis.
+	"""
+	return TerminalColors.RED + TerminalColors.BOLD + msg + TerminalColors.END
 
 #
-#	p r i n t _ f m t m p _ i n f o
+#	w a r n i n g _ s t r i n g
+#
+
+def warning_string (msg: str) -> str:
+	"""
+	Return a warning string with emphasis.
+	"""
+	return TerminalColors.YELLOW + TerminalColors.BOLD + msg + TerminalColors.END
+
+#
+#	p r i n t _ e r r o r
 #
 
 def print_error (msg: str):
 	"""
 	Print an error string with emphasis.
 	"""
-	print (TerminalColors.RED + TerminalColors.BOLD + msg + TerminalColors.END)
+	print (error_string (msg))
+
+#
+#	p r i n t _ w a r n i n g
+#
+
+def print_warning (msg: str):
+	"""
+	Print a warning string with emphasis.
+	"""
+	print (warning_string (msg))
 
 #
 #	p r i n t _ f m t m p _ i n f o
@@ -3689,6 +3734,8 @@ def print_version():
 	Handle a request to display the fmslog version and the versions of various FMS components.
 	"""
 	
+	global FMS_VERSION
+
 	print ()
 	print ('fmslog', VERSION)
 	print ('Latest version at: https://github.com/beezwax/fmslog')
@@ -3697,12 +3744,20 @@ def print_version():
 	
 	# FMS VERSION
 	
-	print ('FMS:', get_fms_version())
-	
+	print ('FMS: ', end='')
+	if FMS_VERSION:
+		print (FMS_VERSION)
+	else:
+		print_warning ('None')
+
 	print ('Apache:', get_apache_version())
 
 	java_str = get_java_version()
-	print ('Java:', java_str)
+	print ('Java: ', end='')
+	if java_str:
+		print (java_str)
+	else:
+		print_warning ('None')
 	
 	print ('NGINX:', get_nginx_version())
 
@@ -3716,7 +3771,7 @@ def print_version():
 				text=True,
 				check=False).stdout[1:]
 		except FileNotFoundError:
-			node_version = '<missing>\n'
+			node_version = error_string('None\n')
 		print ('Node:', node_version, end='')
 	
 	# OPENSSL
@@ -3730,7 +3785,7 @@ def print_version():
 				text=True,
 				check=False).stdout.split()
 		except FileNotFoundError:
-			open_ssl_words = ['','<missing>','']
+			open_ssl_words = ['', error_string('None'), '']
 		print ('OpenSSL:',open_ssl_words[1],open_ssl_words[2])
 
 	elif platform.system() == 'Linux':
@@ -3741,7 +3796,7 @@ def print_version():
 					text=True,
 					check=False).stdout.split()
 		except FileNotFoundError:
-			print ('OpenSSL: not found')
+			open_ssl_words = ['', error_string('None'), '']
 		print ('OpenSSL:',open_ssl_words[1],open_ssl_words[2])
 			
 	if platform.system() == 'Windows':
@@ -3750,7 +3805,13 @@ def print_version():
 	if java_str:
 		print ('Tomcat:', get_tomcat_version())
 
-	print ('Vaadin:', get_vaadin_version())
+	print ('Vaadin: ', end='')
+	vaadin_version = get_vaadin_version()
+	if vaadin_version:
+		print (vaadin_version)
+	else:
+		print_error ('None')
+	
 	print ()
 
 #

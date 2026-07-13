@@ -75,8 +75,8 @@ options:
   -L, --list                list all log files and crash reports, including size, date created & modified, sorted by modification time
   -n, --number RANGE        quantity of lines to print
   -N, --network             network usage info
-  -P, --process-info        metrics for FMS processes
   -p                        password for admin console or API testing file access
+  -P, --process-info        metrics for FMS processes
   -S, --set SET             change log configuration options
   --start-fms               start the FileMaker Server service
   --stop-fms                stop the FileMaker Server service
