@@ -8,7 +8,7 @@ Purpose: Display FileMaker Server logs, change logging options, and get resource
 """
 
 
-VERSION = "0.52 - 2026-07-11"
+VERSION = "0.53 - 2026-07-13"
 
 # Only using standard library modules.
 
@@ -1909,7 +1909,9 @@ class FileMakerODataAPI:
 				'NumberData': random.randint(0, count),
 				'DateData': datetime.datetime.now().date().isoformat()
 			}
-			self.create_record(table, data)
+			record_id = self.create_record(table, data)
+			if not record_id:
+				print(error_string(f"Error: Failed to create record {i+1} in table {table}."))
 
 	def select_records (self, table: str, field:str, pattern: str) -> list:
 		"""
