@@ -78,6 +78,7 @@ options:
   -p                        password for admin console or API testing file access
   -P, --process-info        metrics for FMS processes
   -S, --set SET             change log configuration options
+  --restart-fms             stop and start FileMaker Server service
   --start-fms               start the FileMaker Server service
   --stop-fms                stop the FileMaker Server service
   -s, --succinct            strip less useful details from log output (partially implemented)

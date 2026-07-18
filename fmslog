@@ -918,7 +918,7 @@ def test_odata_functions():
 #	c h e c k _ t c p _ s t a t u s
 #
 
-def check_tcp_status (name: str, host: str, port):
+def check_tcp_status (name: str, host: str, port: str, as_error=True) -> bool:
 	"""
 	Print the result of testing if TCP connection can be opened to the given host's port.
 	"""
@@ -932,7 +932,10 @@ def check_tcp_status (name: str, host: str, port):
 		if result == 0:
 			print (': Responding')
 		else:
-			print_error (f': Error {result}, Could not open port {port}')
+			if as_error:
+				print_error (f': Error {result}, Could not open port {port}')
+			else:
+				print_warning (f': Error {result}, Could not open port {port}')
 	except socket.gaierror:
 		print_error (f': Could not resolve host "{host}"')
 	finally:
@@ -2372,10 +2375,10 @@ def get_file_timestamps (path: str) -> tuple:
 	return (os.path.getmtime(path), pathlib.Path(path).stat().st_mtime)
 
 #
-#	g e t _ f m s _ p i d
+#	g e t _ f m s e r v e r d _ p i d
 #
 
-def get_fms_pid() -> int:
+def get_fmserverd_pid() -> int:
 	"""
 	Return the process ID of the fmserverd process, or None if not running.
 	There will only be one such process on a given system.
@@ -2681,6 +2684,32 @@ def mac_log_tail (minutes_back: str):
 		capture_output=True,
 		text=True).stdout.split('\n')
 
+def manage_service_darwin (path: str, action: str) -> bool:
+	"""
+	Manage a service on macOS using launchctl.
+		path: the path to the service plist file
+		action: 'start', 'stop', or 'restart'
+	Returns true if the operation succeeded.
+	"""
+
+	lc_action = {
+		'start': 'load',
+		'stop': 'unload',
+		'restart': 'kickstart'
+	}.get(action)
+
+	service_proc = subprocess.run(
+		['sudo', 'launchctl', lc_action, path],
+		capture_output=True,
+		text=True,
+		check=False)
+
+	if service_proc.returncode != 0:
+		print_error ('error')
+		print_error (service_proc.stderr)
+	
+	return service_proc.returncode == 0
+
 #
 #	m a n a g e _ f m s _ s e r v i c e
 #
@@ -2690,65 +2719,58 @@ def manage_fms_service (action: str) -> bool:
 	Start, stop, or restart the FileMaker Server service.
 	Returns true if the operation succeeded.
 	"""
+
 	curr_platform = platform.system()
-	got_sudo_prompt = False
-	macos_actions = {
-		'start': 'load',
-		'stop': 'unload',
-		'restart': 'kickstart'	# requires -k option
-	}
+	result = False
 
 	if curr_platform in ['Darwin', 'Linux']:
 
-		fms_pid = get_fms_pid()
-
+		fms_pid = get_fmserverd_pid()
 		sudo_preflight()
 
-		if action == 'stop':
+		if action == 'stop' or action == 'restart':
 			if fms_pid:
-				print ('Ensuring that databases are closed cleanly before stopping FMS...', end='', flush=True)
+				print ('Attempting to close databases before stopping FMS...', end='', flush=True)
 				if send_signal_to_process (fms_pid):	# send USR1 to close files
 					print ('done')
+					# Wait a few seconds for the process to close files before stopping the service.
+					time.sleep(2)
 				else:
-					print ('failed')
+					print_warning ('failed')
 				print ('Stopping FMS service...', end='', flush=True)
 
 			else:
-				print ('The fmserverd process is not currently running')
+				print_warning ('The fmserverd process is not currently running')
 				print ('Proceeding to stop the service...',end='', flush=True)
 
-		# For the remainder, handle any of the 3 actions the same based on OS
-		if curr_platform == 'Darwin':
-			lc_action = macos_actions[action]
+			if curr_platform == 'Darwin':
+				result = manage_service_darwin ('/Library/LaunchDaemons/com.filemaker.fms.plist', 'stop')
+			elif curr_platform == 'Linux':
+				result = manage_service_linux ('fmshelper.service', 'stop')
 			
-			if action == 'start':
-				if fms_pid:
-					print ('FMS service is already running.')
-					return True
-				print ('Starting FMS service...', end='', flush=True)
-			service_proc = subprocess.run(
-				['sudo', 'launchctl', lc_action, '/Library/LaunchDaemons/com.filemaker.fms.plist'],
-				capture_output=True,
-				text=True,
-				check=False)
-			print ('done.')
+			if result:
+				print ('done')
+		
+		if fms_pid and action == 'start':
+			print_warning (f'fmserverd process is already running with PID {fms_pid}.')
+			return True
+			
+		if action == 'start' or action == 'restart':
+			print ('Starting FMS service...', end='', flush=True)
 
-		elif curr_platform == 'Linux':
-			if not got_sudo_prompt and os.getuid() != 0:
-				print ('Running systemctl with sudo, you may be prompted for password.')
-			service_proc = subprocess.run(
-				['sudo', 'systemctl', action, 'fmshelper.service'],
-				capture_output=True,
-				text=True,
-				check=False)
-			print ('done.')
+			if curr_platform == 'Darwin':
+				result = manage_service_darwin ('/Library/LaunchDaemons/com.filemaker.fms.plist', 'start')
+			elif curr_platform == 'Linux':
+				result = manage_service_linux ('fmshelper.service', 'start')
+
+			if result:
+				print ('done')
 
 	else:
 		# Windows not yet implemented
 		return False
 
-	print (service_proc.stderr)
-	return service_proc.returncode == 0
+	return result
 
 #
 #	p a r s e _ b e g i n _ t i m e
@@ -4273,8 +4295,7 @@ def handle_named_options (args) -> bool:
 		ignore_positionals = True
 
 	if args.restart_fms:
-		manage_fms_service('stop')
-		manage_fms_service('start')
+		manage_fms_service('restart')
 		ignore_positionals = True
 
 	if args.start_fms:
