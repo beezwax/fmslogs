@@ -8,7 +8,7 @@ Purpose: Display FileMaker Server logs, change logging options, and get resource
 """
 
 
-VERSION = "0.53 - 2026-07-13"
+VERSION = "0.54 - 2026-07-18"
 
 # Only using standard library modules.
 
@@ -2353,18 +2353,29 @@ def get_db_directories() -> tuple:
 #
 
 def get_local_ip() -> str:
-	s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-	try:
-		s.settimeout (4)
-		# doesn't even have to be reachable
-		s.connect(('8.8.8.8', 1))
-		addr = s.getsockname()[0]
-	except Exception as e:
-		print (e)
-		addr = '127.0.0.1'
-	finally:
-		s.close()
-	return addr
+	"""
+	Return the local IP address of the machine.
+	Will first try to get an IPv4, then IPv6 address. If neither is found, returns None.
+	Loopback and link-local addresses are ignored.
+	"""
+
+	ipv4 = list()
+	ipv6 = list()
+
+	for item in socket.getaddrinfo(socket.gethostname(), None):
+		protocol, *_, (ip, *_) = item
+		if protocol == socket.AddressFamily.AF_INET:
+			if ip not in ipv4 and not ip.startswith('127.'):
+				ipv4.append(ip)
+		elif protocol == socket.AddressFamily.AF_INET6:
+			if ip not in ipv6 and (not ip.startswith('::1') or ip.startswith('fe80:')):
+				ipv6.append(ip)
+	
+	if ipv4:
+		return ipv4[0]
+	elif ipv6:
+		return ipv6[0]	
+	return None
 
 #
 #	g e t _ f i l e _ t i m e s t a m p s
@@ -2704,7 +2715,8 @@ def manage_service_darwin (path: str, action: str) -> bool:
 		text=True,
 		check=False)
 
-	if service_proc.returncode != 0:
+	# Checking the returncode does not work, so check for presence of stderr instead.
+	if service_proc.stderr:
 		print_error ('error')
 		print_error (service_proc.stderr)
 	
