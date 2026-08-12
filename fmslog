@@ -609,7 +609,6 @@ CLARIS_CONFIG = """
 {
 	"AlwaysPrint": true,
 	"ForceOutput": true,
-	// May want to turn off RemoteCalls if not debugging client connectivity.
 	"RemoteCalls": true,
 	"ServerCommands": true,
 	"Server": true
