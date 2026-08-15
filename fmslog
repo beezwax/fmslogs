@@ -90,7 +90,7 @@ def get_log_path (log: str) -> str:
 	try:
 		pathSuffix = LOG_SPECS [log]['path']
 	except KeyError:
-		print (f'Error: {log} is an invalid log name')
+		print_warning (f'Error: {log} is an invalid log name')
 		return None
 
 	if pathSuffix[0] == '!':
@@ -107,7 +107,6 @@ def get_log_path (log: str) -> str:
 			full_path = path_list[0]
 		else:
 			full_path = None
-			print (f'Error: no log file present for {log}')
 	
 	return full_path
 
@@ -3472,10 +3471,7 @@ def print_log_info():
 			size = stat_info.st_size
 			print(f'{log:21} {size:>11,}  {create_timestamp:<25}  {mod_timestamp:<25}  {full_path:<40}')
 		else:
-			if full_path is None:
-				print(f'{log:21}              ---')
-			else:
-				print(f'{log:21}              <missing>')
+			print(f'{log:21}              <missing>')
 
 	print ()
 	print_crash_reports()
