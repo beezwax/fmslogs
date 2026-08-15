@@ -7,8 +7,7 @@ Author: Simon Brown on 10/15/2025
 Purpose: Display FileMaker Server logs, change logging options, and get resource usage.
 """
 
-
-VERSION = "0.54 - 2026-07-18"
+VERSION = "0.55 - 2026-08-15"
 
 # Only using standard library modules.
 
@@ -2269,22 +2268,35 @@ def get_subfolder_names (folder: str) -> list:
 def get_tomcat_version() -> str:
 	"""
 	If Java is available, get the installed Tomcat/Catalina version.
+	If Java is not available, return "Unknown".
+	If can't get Tomcat version, return None.
 	"""
 	tomcat_out = None
+	java_missing_str = 'Unknown'
 	
 	try:
 		if platform.system() == 'Darwin':
-			tomcat_out = subprocess.run(
-				[BASE_PATH + '/Web Publishing/java/bin/java', '-cp', '/Library/FileMaker Server/Web Publishing/publishing-engine/jwpc-tomcat/lib/catalina.jar', 'org.apache.catalina.util.ServerInfo'],
-				capture_output=True,
-				text=True,
-				check=False).stdout
+			java_path = BASE_PATH + '/Web Publishing/java/bin/java'
+			if os.path.isfile (java_path):
+				tomcat_out = subprocess.run(
+					[java_path, '-cp', '/Library/FileMaker Server/Web Publishing/publishing-engine/jwpc-tomcat/lib/catalina.jar', 'org.apache.catalina.util.ServerInfo'],
+					capture_output=True,
+					text=True,
+					check=False).stdout
+			else:
+				return java_missing_str
+
 		if platform.system() == 'Linux':
-			tomcat_out = subprocess.run(
-				[BASE_PATH + '/usr/bin/java', '-cp', '/opt/FileMaker/FileMaker Server/Web Publishing/publishing-engine/jwpc-tomcat/lib/catalina.jar', 'org.apache.catalina.util.ServerInfo'],
-				capture_output=True,
-				text=True,
-				check=False).stdout
+			java_path = BASE_PATH + '/usr/bin/java'
+			if os.path.isfile (java_path):
+				tomcat_out = subprocess.run(
+					[java_path, '-cp', '/opt/FileMaker/FileMaker Server/Web Publishing/publishing-engine/jwpc-tomcat/lib/catalina.jar', 'org.apache.catalina.util.ServerInfo'],
+					capture_output=True,
+					text=True,
+					check=False).stdout
+			else:
+				return java_missing_str
+
 	except FileNotFoundError:
 		pass
 	
@@ -3803,7 +3815,7 @@ def print_version():
 	if java_str:
 		print (java_str)
 	else:
-		print_warning ('None')
+		print_warning ('Not at default path')
 	
 	print ('NGINX:', get_nginx_version())
 
@@ -3832,7 +3844,18 @@ def print_version():
 				check=False).stdout.split()
 		except FileNotFoundError:
 			open_ssl_words = ['', error_string('None'), '']
-		print ('OpenSSL:',open_ssl_words[1],open_ssl_words[2])
+		print ('OpenSSL (FMS):',open_ssl_words[1],open_ssl_words[2])
+
+		# check OS copy (used by Apache).
+		try:
+			open_ssl_words = subprocess.run(
+				['/usr/bin/openssl','version'],
+				capture_output=True,
+				text=True,
+				check=False).stdout.split()
+		except FileNotFoundError:
+			open_ssl_words = ['', error_string('None'), '']
+		print ('OpenSSL (OS):',open_ssl_words[1])
 
 	elif platform.system() == 'Linux':
 		try:
@@ -3848,8 +3871,7 @@ def print_version():
 	if platform.system() == 'Windows':
 		print ('IIS: ')
 
-	if java_str:
-		print ('Tomcat:', get_tomcat_version())
+	print ('Tomcat:', get_tomcat_version())
 
 	print ('Vaadin: ', end='')
 	vaadin_version = get_vaadin_version()
