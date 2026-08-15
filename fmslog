@@ -3450,6 +3450,7 @@ def print_log_info():
 
 		if mod_time > 0:
 			mod_timestamp = time.ctime(mod_time)
+			age_seconds = max(0, time.time() - mod_time)
 
 			stat_info = os.stat(full_path)
 
@@ -3469,7 +3470,16 @@ def print_log_info():
 				#create_timestamp = datetime.datetime.fromtimestamp(stat_info.st_birthtime).isoformat()
 
 			size = stat_info.st_size
-			print(f'{log:21} {size:>11,}  {create_timestamp:<25}  {mod_timestamp:<25}  {full_path:<40}')
+			mod_display = f'{mod_timestamp:<25}'
+
+			# If log file is older than 7 days, color the modified timestamp red.
+			# If older than 1 day, color the modified timestamp yellow.
+			if age_seconds > (7 * 24 * 60 * 60):
+				mod_display = error_string(mod_display)
+			elif age_seconds > (24 * 60 * 60):
+				mod_display = warning_string(mod_display)
+
+			print(f'{log:21} {size:>11,}  {create_timestamp:<25}  {mod_display}  {full_path:<40}')
 		else:
 			print(f'{log:21}              <missing>')
 
