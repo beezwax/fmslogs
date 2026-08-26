@@ -2762,7 +2762,7 @@ def manage_service_linux (name: str, action: str) -> bool:
 	"""
 
 	service_proc = subprocess.run(
-		['sudo', 'systemctl', lc_action, name],
+		['sudo', 'systemctl', action, name],
 		capture_output=True,
 		text=True,
 		check=False)
