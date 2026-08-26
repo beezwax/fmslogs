@@ -1702,7 +1702,7 @@ class FileMakerDAPI:
 				'TextData': random_string(255),
 				'NumberData': '123456789012345678901234.123456789', #random.randint(0, count),
 				'DateData': datetime.datetime.now().strftime('%m/%d/%Y')
-			}https://www.cnn.com/2026/08/19/us/video/trump-wh-construction-update-vrtc-digvid
+			}
 			self.create_record(table, data)
 
 	def select_records(self, table: str, field: str, pattern: str) -> list:
