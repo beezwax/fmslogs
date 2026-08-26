@@ -7,7 +7,7 @@ Author: Simon Brown on 10/15/2025
 Purpose: Display FileMaker Server logs, change logging options, and get resource usage.
 """
 
-VERSION = "0.55 - 2026-08-15"
+VERSION = "0.56 - 2026-08-25"
 
 # Only using standard library modules.
 
@@ -41,6 +41,7 @@ import time
 import ssl
 import urllib.request, urllib.parse, urllib.error
 from contextlib import ExitStack
+from decimal import Decimal
 
 #
 #	g e t _ f m s _ v e r s i o n
@@ -886,7 +887,7 @@ def test_dapi_functions():
 			dapi.invalidate_token()
 			
 	else:
-		print ('Error: must specify both user and password for OData test file')
+		print ('Error: must specify both user and password for DAPI test file')
 		sys.exit(3)
 
 #
@@ -1699,9 +1700,9 @@ class FileMakerDAPI:
 		for i in range(count):
 			data = {
 				'TextData': random_string(255),
-				'NumberData': random.randint(0, count),
+				'NumberData': '123456789012345678901234.123456789', #random.randint(0, count),
 				'DateData': datetime.datetime.now().strftime('%m/%d/%Y')
-			}
+			}https://www.cnn.com/2026/08/19/us/video/trump-wh-construction-update-vrtc-digvid
 			self.create_record(table, data)
 
 	def select_records(self, table: str, field: str, pattern: str) -> list:
@@ -2716,6 +2717,10 @@ def mac_log_tail (minutes_back: str):
 		capture_output=True,
 		text=True).stdout.split('\n')
 
+#
+#	m a n a g e _ s e r v i c e _ d a r w i n
+#
+
 def manage_service_darwin (path: str, action: str) -> bool:
 	"""
 	Manage a service on macOS using launchctl.
@@ -2738,8 +2743,32 @@ def manage_service_darwin (path: str, action: str) -> bool:
 
 	# Checking the returncode does not work, so check for presence of stderr instead.
 	if service_proc.stderr:
-		print_error ('error')
+		print_error (f'Error: {service_proc.stderr}')
 		print_error (service_proc.stderr)
+		return False
+	
+	return True
+
+#
+#	m a n a g e _ s e r v i c e _ l i n u x
+#
+
+def manage_service_linux (name: str, action: str) -> bool:
+	"""
+	Manage a service on Ubuntu using systemctl.
+		name: the service name (eg, 'fmshelper')
+		action: 'start', 'stop', or 'restart'
+	Returns true if the operation succeeded.
+	"""
+
+	service_proc = subprocess.run(
+		['sudo', 'systemctl', lc_action, name],
+		capture_output=True,
+		text=True,
+		check=False)
+
+	if service_proc.returncode:
+		print_error (f'Error: returncode={service_proc.returncode}')
 	
 	return service_proc.returncode == 0
 
@@ -3397,6 +3426,7 @@ def print_log (log_name: str, count: int):
 	
 	elif OUTPUT_MODE is OutputMode.HEAD:
 		lines_printed = print_head (log_name, count, SHOW_HEADERS, SUCCINCT_MODE)
+
 	else:
 		print ('Error: unknown output mode')
 	
@@ -3610,6 +3640,30 @@ def print_head (log_name: str, count: int, header: bool, succinct: bool) -> int:
 
 	return len (line_list) + header_count
 
+
+
+def read_system_log():
+	"""
+	Print the macOS or Ubuntu system log, filtered for FMS messages.
+	"""
+	if platform.system() != 'Darwin':
+		print("This function is only supported on macOS.")
+		return
+
+	try:
+		# Get today's date in the format used by the system log
+		today = datetime.datetime.now().strftime("%b %d")
+		# Run the syslog command and filter for FMS messages
+		syslog_proc = subprocess.run(
+			['/usr/bin/log', 'show', '--info', '--last', '1h', '--predicate', 'processImagePath CONTAINS "fmserverd" or processImagePath CONTAINS "fmsgetpasskey"'],
+			capture_output=True,
+			text=True,
+			check=False)
+		print(syslog_proc.stdout)
+	except Exception as e:
+		print_error (f"Error: while retrieving system log: {e}")
+
+
 #
 #	p r i n t _ n e t _ s t a t u s
 #
@@ -3703,21 +3757,26 @@ def print_tail (log_name: str, count: int, header: bool, succinct: bool) -> int:
 	else:
 		header_count = 0
 
-	# Below we can files only, creating a list of records to later print.
+	# Below we process the log messages, creating a list of records to later print.
 	
 	# JUST DETERMINE START LINE AND USE THAT AS PARAM TO SINGLE READ FUNC?
-	
-	if TIMESTAMP_START:
-		if FILTER_REGEX:
-			line_list = read_tail_filtered_and_time (log_path, line_count)
-		else:
-			line_list = read_tail_time (log_path, line_count)
+
+	if log_name == 'syslog':
+		# On macOS, the system log is not a regular text file, so we need to read it differently.
+		line_list = read_system_log (line_count)
+
 	else:
-		if FILTER_REGEX:
-			line_list = read_tail_filtered (log_path, line_count)
+		if TIMESTAMP_START:
+			if FILTER_REGEX:
+				line_list = read_tail_filtered_and_time (log_path, line_count)
+			else:
+				line_list = read_tail_time (log_path, line_count)
 		else:
-			#print ('unfiltered')
-			line_list = read_tail (log_path, line_count)
+			if FILTER_REGEX:
+				line_list = read_tail_filtered (log_path, line_count)
+			else:
+				#print ('unfiltered')
+				line_list = read_tail (log_path, line_count)
 	
 	# the actual line_count is now this:
 	line_count = len (line_list)
